@@ -113,10 +113,10 @@ export default function AskClient() {
           {messages.map((m, i) => (
             <div key={i} className={`${s.msg} ${m.role === 'user' ? s.user : ''}`}>
               <div className={s.msgAvatar}>{m.role === 'user' ? initials : '✦'}</div>
-              <div
-                className={s.bubble}
-                dangerouslySetInnerHTML={{ __html: m.html }}
-              />
+              {m.role === 'ai'
+                ? <div className={s.bubble} dangerouslySetInnerHTML={{ __html: m.html }} />
+                : <div className={s.bubble}>{m.html}</div>
+              }
             </div>
           ))}
           {thinking && (
