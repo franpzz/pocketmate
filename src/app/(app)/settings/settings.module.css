@@ -381,6 +381,22 @@
   color: var(--accent);
 }
 
+/* Migrate button */
+.migrateBtn {
+  background: none;
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-sm);
+  color: var(--text2);
+  padding: 8px 16px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.migrateBtn:hover { border-color: var(--accent); color: var(--accent); }
+
 /* Sign out */
 .signOutBtn {
   background: none;

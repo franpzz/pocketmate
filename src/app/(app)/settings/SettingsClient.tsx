@@ -457,9 +457,20 @@ export default function SettingsClient() {
         <div className={s.saveConfirm}>✓ All changes saved and dashboard updated</div>
       )}
 
-      {/* ── Sign out ── */}
+      {/* ── Account ── */}
       <div className={s.section} style={{ marginTop: 32 }}>
         <div className={s.sectionTitle}>Account</div>
+        <div className={s.card}>
+          <div className={s.row}>
+            <div className={s.rowLabel}>
+              <div className={s.rowName}>Import from Ledge</div>
+              <div className={s.rowSub}>Migrate data from the original Ledge browser app</div>
+            </div>
+            <div className={s.rowControl}>
+              <button className={s.migrateBtn} type="button" onClick={() => router.push('/migrate')}>Import</button>
+            </div>
+          </div>
+        </div>
         <button className={s.signOutBtn} onClick={signOut}>Sign out</button>
       </div>
     </div>
