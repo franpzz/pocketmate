@@ -1,0 +1,95 @@
+.pageHeader {
+  margin-bottom: 28px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.pageTitle {
+  font-family: var(--font-serif);
+  font-size: 28px;
+  letter-spacing: -0.5px;
+  margin-bottom: 4px;
+}
+
+.pageSub { color: var(--text2); font-size: 13px; }
+
+.filterRow { display: flex; gap: 6px; flex-shrink: 0; }
+
+.filterBtn {
+  padding: 7px 14px;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 20px;
+  color: var(--text2);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.filterBtn:hover  { border-color: var(--accent); color: var(--accent); }
+.filterBtn.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 22px;
+  box-shadow: var(--shadow);
+}
+
+.cardTitle {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin-bottom: 16px;
+}
+
+.txnList { display: flex; flex-direction: column; gap: 2px; }
+
+.txnItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  transition: background 0.15s;
+}
+
+.txnItem:hover { background: var(--surface2); }
+
+.txnIcon {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.txnInfo  { flex: 1; }
+.txnName  { font-size: 13px; font-weight: 500; }
+.txnCat   { font-size: 11px; color: var(--text3); }
+.txnRight { text-align: right; }
+
+.txnAmt { font-size: 13px; font-weight: 600; }
+.txnAmt.neg { color: var(--red); }
+.txnAmt.pos { color: var(--accent); }
+[data-theme="dark"] .txnAmt.pos { color: var(--teal); }
+
+.txnDate { font-size: 11px; color: var(--text3); }
+
+.empty   { text-align: center; padding: 32px 0; color: var(--text3); font-size: 13px; }
+.loading { display: flex; align-items: center; justify-content: center; min-height: 40vh; color: var(--text3); }
+
+@media (max-width: 700px) {
+  .pageHeader { flex-direction: column; gap: 12px; }
+  .pageTitle  { font-size: 22px; }
+}

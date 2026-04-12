@@ -1,0 +1,116 @@
+.pageHeader { margin-bottom: 28px; }
+.pageTitle  { font-family: var(--font-serif); font-size: 28px; letter-spacing: -0.5px; margin-bottom: 4px; }
+.pageSub    { color: var(--text2); font-size: 13px; }
+
+.shopHeader {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 20px;
+  align-items: flex-end;
+}
+
+.budgetDisplay {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 22px;
+  flex: 1;
+  box-shadow: var(--shadow);
+}
+
+.bdLabel { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 4px; }
+.bdVal   { font-family: var(--font-serif); font-size: 28px; color: var(--accent); }
+
+.genBtn {
+  padding: 14px 22px;
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius);
+  color: #2A2318;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+
+.genBtn:hover    { background: var(--accent-mid); }
+.genBtn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.emptyState {
+  text-align: center;
+  padding: 48px 20px;
+  color: var(--text3);
+  font-size: 13px;
+}
+
+.spin {
+  display: inline-block;
+  font-size: 24px;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.shopList { display: flex; flex-direction: column; gap: 8px; }
+
+.shopItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  animation: fadeUp 0.3s ease both;
+  box-shadow: var(--shadow);
+}
+
+@keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+.shopItem.done .shopName { text-decoration: line-through; color: var(--text3); }
+
+.check {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1px solid var(--border2);
+  cursor: pointer;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  font-size: 11px;
+}
+
+.check.checked {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #2A2318;
+}
+
+.shopName  { flex: 1; font-size: 13px; }
+.shopQty   { font-size: 12px; color: var(--text3); }
+.shopPrice { font-size: 13px; font-weight: 600; color: var(--text2); }
+
+.shopTotal {
+  display: flex;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: var(--accent-dim2);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  margin-top: 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.totalVal { color: var(--accent); }
+
+@media (max-width: 700px) {
+  .shopHeader { flex-direction: column; align-items: stretch; }
+  .pageTitle  { font-size: 22px; }
+}
