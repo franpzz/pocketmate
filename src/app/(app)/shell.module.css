@@ -1,0 +1,25 @@
+.appRoot {
+  display: flex;
+  flex-direction: row;
+  min-height: 100vh;
+  background: var(--bg);
+}
+
+/* Desktop sidebar is part of the flex row */
+.sidebarWrap {
+  flex-shrink: 0;
+}
+
+.main {
+  flex: 1;
+  overflow-y: auto;
+  padding: 32px;
+  min-width: 0;
+}
+
+/* Hide sidebar on mobile */
+@media (max-width: 700px) {
+  .sidebarWrap { display: none; }
+  .appRoot     { flex-direction: column; }
+  .main        { padding: 16px 14px 90px; }
+}
