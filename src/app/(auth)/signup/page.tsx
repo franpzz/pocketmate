@@ -63,74 +63,119 @@ export default function SignupPage() {
   async function handleSignup(e: React.FormEvent) {
     e.preventDefault()
     setError('')
-    setLoading(true)
 
+    // Password strength: min 8 chars, upper, lower, digit
+    if (
+      password.length < 8 ||
+      !/[A-Z]/.test(password) ||
+      !/[a-z]/.test(password) ||
+      !/[0-9]/.test(password)
+    ) {
+      setError('Password must be at least 8 characters and include uppercase, lowercase, and a number.')
+      return
+    }
+
+    setLoading(true)
     const supabase = createClient()
 
-    // 1. Create auth account
-    const { data, error: signUpError } = await supabase.auth.signUp({ email, password })
-    if (signUpError) { setError(signUpError.message); setLoading(false); return }
+    // 1. Create auth account — pass onboarding data as user metadata so the
+    //    database trigger (002_hardening.sql) can create profile rows even
+    //    when email confirmation is required and there is no session yet.
+    const incomeNum        = parseFloat(income) || 0
+    const monthlyTargetNum = parseFloat(monthlyTarget) || 500
+    const { data, error: signUpError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          name:           name || 'User',
+          income:         incomeNum,
+          cadence,
+          groceries,
+          dining,
+          transport,
+          entertainment,
+          monthly_target: monthlyTargetNum,
+          goal_name:      goalName || 'Savings goal',
+        },
+      },
+    })
+
+    if (signUpError) {
+      // Generic message — don't expose Supabase internals
+      setError('Could not create your account. Please check your email and try again.')
+      setLoading(false)
+      return
+    }
 
     const user = data.user
     if (!user) { setError('Signup failed. Please try again.'); setLoading(false); return }
 
-    // 2. Insert profile
-    const { error: profileError } = await supabase.from('profiles').insert({
-      user_id: user.id,
-      name: name || 'User',
-      income: parseFloat(income) || 0,
-      cadence,
-      extra: 0,
-      groceries,
-      dining,
-      transport,
-      entertainment,
-      monthly_target: parseFloat(monthlyTarget) || 500,
-      goal_name: goalName || 'Savings goal',
-      total_savings: 0,
-    })
-    if (profileError) { setError(profileError.message); setLoading(false); return }
-
-    // 3. Insert cycle_state
-    await supabase.from('cycle_state').insert({
-      user_id: user.id,
-      wallet: 0,
-      cycle_income: 0,
-      has_first_pay: false,
-      cycle_spending: {},
-    })
-
-    // 4. Insert fixed expenses
-    const validFixed = fixed.filter(f => f.name.trim() && parseFloat(f.amount) > 0)
-    if (validFixed.length > 0) {
-      await supabase.from('fixed_expenses').insert(
-        validFixed.map((f, i) => ({
-          user_id: user.id,
-          name: f.name.trim(),
-          amount: parseFloat(f.amount),
-          cat: f.cat,
-          split: Math.max(1, parseInt(f.split) || 1),
-          paid_this_cycle: false,
-          sort_order: i,
-        }))
-      )
-    }
-
-    // 5. Insert initial monthly_savings row for this year
-    await supabase.from('monthly_savings').insert({
-      user_id: user.id,
-      year: new Date().getFullYear(),
-      months: new Array(12).fill(0),
-    })
-
-    setLoading(false)
-
-    // If email confirmation is required, show the "check email" message
+    // 2. If email confirmation is required, data.session is null.
+    //    The trigger already created profile/cycle_state/monthly_savings rows,
+    //    so we just show the "check email" screen. Fixed expenses can be added
+    //    in Settings after confirming.
     if (!data.session) {
+      setLoading(false)
       setCheckEmail(true)
       return
     }
 
+    // 3. Session available (confirmation OFF) — upsert so we're idempotent
+    //    if the trigger already created the row.
+    const { error: profileError } = await supabase.from('profiles').upsert({
+      user_id:        user.id,
+      name:           name || 'User',
+      income:         incomeNum,
+      cadence,
+      extra:          0,
+      groceries,
+      dining,
+      transport,
+      entertainment,
+      monthly_target: monthlyTargetNum,
+      goal_name:      goalName || 'Savings goal',
+      total_savings:  0,
+    }, { onConflict: 'user_id' })
+
+    if (profileError) {
+      setError('Could not save your profile. Please try again.')
+      setLoading(false)
+      return
+    }
+
+    await supabase.from('cycle_state').upsert({
+      user_id:      user.id,
+      wallet:       0,
+      cycle_income: 0,
+      has_first_pay: false,
+      cycle_spending: {},
+    }, { onConflict: 'user_id' })
+
+    // 4. Fixed expenses
+    const validFixed = fixed.filter(f => f.name.trim() && parseFloat(f.amount) > 0)
+    if (validFixed.length > 0) {
+      await supabase.from('fixed_expenses').insert(
+        validFixed.map((f, i) => ({
+          user_id:         user.id,
+          name:            f.name.trim(),
+          amount:          parseFloat(f.amount),
+          cat:             f.cat,
+          split:           Math.max(1, parseInt(f.split) || 1),
+          paid_this_cycle: false,
+          sort_order:      i,
+        }))
+      )
+    }
+
+    // 5. Monthly savings row for this year
+    await supabase.from('monthly_savings').upsert({
+      user_id: user.id,
+      year:    new Date().getFullYear(),
+      months:  new Array(12).fill(0),
+    }, { onConflict: 'user_id,year' })
+
+    setLoading(false)
     router.push('/dashboard')
     router.refresh()
   }
@@ -144,6 +189,7 @@ export default function SignupPage() {
           <p className={s.sub}>
             We&apos;ve sent a confirmation link to <strong>{email}</strong>.
             Click it to activate your account, then sign in.
+            Your income and budget settings are saved — you can add your regular bills in Settings after you log in.
           </p>
           <Link href="/login" className={s.btnPrimary} style={{ display: 'block', textAlign: 'center', marginTop: 8 }}>
             Go to sign in →

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -13,6 +13,13 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('error') === 'confirmation_failed') {
+      setError('Email confirmation failed. The link may have expired — please sign up again.')
+    }
+  }, [])
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
@@ -20,7 +27,8 @@ export default function LoginPage() {
     const supabase = createClient()
     const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
     if (authError) {
-      setError(authError.message)
+      // Generic message — don't reveal whether the email exists
+      setError('Incorrect email or password. Please try again.')
       setLoading(false)
     } else {
       router.push('/dashboard')
