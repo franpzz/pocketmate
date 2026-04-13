@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { writeVault } from '@/lib/vault'
 import s from './migrate.module.css'
 
 interface LedgeFixed {
@@ -103,31 +104,37 @@ export default function MigrateClient() {
       const cy  = new Date().getFullYear()
       const now = new Date().toISOString()
 
-      // 1. Profile
+      // 1. Profile — sensitive fields go via vault, non-sensitive direct to Supabase
+      await writeVault({
+        income:         data.income,
+        total_savings:  data.totalSavings,
+        monthly_target: data.monthlyTarget,
+      })
+
       await supabase.from('profiles').update({
         name:           data.name,
-        income:         data.income,
         cadence:        data.cadence,
         extra:          data.extra,
         groceries:      data.groceries,
         dining:         data.dining,
         transport:      data.transport,
         entertainment:  data.entertainment,
-        monthly_target: data.monthlyTarget,
         goal_name:      data.goalName,
-        total_savings:  data.totalSavings,
         updated_at:     now,
       }).eq('user_id', uid)
 
-      // 2. Cycle state
-      await supabase.from('cycle_state').update({
-        wallet:          data.wallet,
-        cycle_income:    data.cycleIncome,
-        has_first_pay:   data.hasFirstPay,
-        last_paid_date:  data.lastPaidDate || null,
+      // 2. Cycle state — wallet/cycle_income/last_cycle_saved via vault
+      await writeVault({
+        wallet:           data.wallet,
+        cycle_income:     data.cycleIncome,
         last_cycle_saved: data.lastCycleSaved ?? null,
-        cycle_spending:  data.cycleSpending,
-        updated_at:      now,
+      })
+
+      await supabase.from('cycle_state').update({
+        has_first_pay:  data.hasFirstPay,
+        last_paid_date: data.lastPaidDate || null,
+        cycle_spending: data.cycleSpending,
+        updated_at:     now,
       }).eq('user_id', uid)
 
       // 3. Fixed expenses — replace
@@ -165,19 +172,9 @@ export default function MigrateClient() {
         }
       }
 
-      // 5. Monthly savings for current year
+      // 5. Monthly savings for current year — via vault (encrypted)
       const monthlySaved = data.savedYear === cy ? (data.monthlySaved || new Array(12).fill(0)) : new Array(12).fill(0)
-      const { data: existing } = await supabase
-        .from('monthly_savings')
-        .select('id')
-        .eq('user_id', uid)
-        .eq('year', cy)
-        .maybeSingle()
-      if (existing) {
-        await supabase.from('monthly_savings').update({ months: monthlySaved }).eq('user_id', uid).eq('year', cy)
-      } else {
-        await supabase.from('monthly_savings').insert({ user_id: uid, year: cy, months: monthlySaved })
-      }
+      await writeVault({ months: monthlySaved })
 
       // 6. Custom categories — replace
       await supabase.from('custom_categories').delete().eq('user_id', uid)

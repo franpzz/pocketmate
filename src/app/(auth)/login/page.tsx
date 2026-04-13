@@ -20,6 +20,23 @@ export default function LoginPage() {
     }
   }, [])
 
+  function tryGuest() {
+    // Set a 7-day cookie (pm_guest=1) so the proxy lets them through
+    document.cookie = 'pm_guest=1; path=/; max-age=604800'
+    // Seed default guest data so the dashboard has something to show
+    const defaults = {
+      name: 'Guest', income: 2000, cadence: 'weekly', extra: 0,
+      groceries: 120, dining: 80, transport: 80, entertainment: 20,
+      monthly_target: 500, goal_name: 'Savings goal', total_savings: 0,
+      wallet: 0, cycle_income: 0, has_first_pay: false,
+      last_paid_date: null, last_cycle_saved: null,
+      cycle_spending: {}, months: new Array(12).fill(0),
+      fixed: [], transactions: [], customCats: [],
+    }
+    localStorage.setItem('pm_guest_data', JSON.stringify(defaults))
+    router.push('/dashboard')
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
@@ -78,6 +95,15 @@ export default function LoginPage() {
             {loading ? 'Signing in…' : 'Sign in →'}
           </button>
         </form>
+
+        <button
+          type="button"
+          onClick={tryGuest}
+          className={s.btnPrimary}
+          style={{ marginTop: 8, background: 'var(--surface2)', color: 'var(--text2)', border: '1px solid var(--border2)' }}
+        >
+          Try it out (no account needed) →
+        </button>
 
         <div className={s.footerLink}>
           No account? <Link href="/signup">Create one</Link>

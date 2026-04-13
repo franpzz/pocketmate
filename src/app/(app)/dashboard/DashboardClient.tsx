@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAppState } from '@/context/AppStateContext'
 import { useTheme } from '@/context/ThemeContext'
+import { writeVault } from '@/lib/vault'
 import {
   mul, monthlyIncome, fixedTotal,
   grocM, diningM, transM, entM,
@@ -12,10 +13,10 @@ import {
 import {
   CAT_DEFS, getCatDef, getCatIcon, getCatBg,
 } from '@/lib/categories'
-import type { FixedExpense } from '@/lib/types'
+import type { FixedExpense, Transaction } from '@/lib/types'
 import s from './dashboard.module.css'
 
-const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+const MONTH_NAMES      = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 const MONTH_NAMES_LONG = ['January','February','March','April','May','June','July','August','September','October','November','December']
 
 function fmt(n: number) {
@@ -29,7 +30,7 @@ function greeting() {
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function DashboardClient() {
-  const { profile, cycleState, fixedExpenses, transactions, monthlySavings, customCats, loading, refetch } = useAppState()
+  const { profile, cycleState, fixedExpenses, transactions, monthlySavings, customCats, loading, isGuest, refetch, guestUpdate } = useAppState()
   const { theme, toggle } = useTheme()
   const [paidLoading, setPaidLoading] = useState(false)
   const [paidBtn, setPaidBtn] = useState<'idle' | 'done'>('idle')
@@ -57,70 +58,97 @@ export default function DashboardClient() {
   async function gotPaid() {
     if (paidLoading) return
     setPaidLoading(true)
+
+    const now = new Date()
+    const todayISO = now.toISOString().split('T')[0]
+    const payLabel = cadence === 'weekly' ? 'Weekly pay'
+      : cadence === 'fortnightly' ? 'Fortnightly pay' : 'Monthly pay'
+
+    let savedThisCycle = 0
+    const newMonths = [...months]
+    if (has_first_pay && wallet > 0) {
+      savedThisCycle = wallet
+      newMonths[cm] = (newMonths[cm] || 0) + wallet
+    }
+    const newLastSaved = has_first_pay ? (wallet <= 0 ? 0 : wallet) : null
+
+    // ── Guest branch ──────────────────────────────────────────────────────────
+    if (isGuest) {
+      const newTxns: Transaction[] = [...transactions]
+      if (savedThisCycle > 0) {
+        newTxns.unshift({
+          id: crypto.randomUUID(), user_id: 'guest',
+          icon: '🏦', bg: 'var(--accent-dim)',
+          name: 'Cycle savings', cat: 'Savings',
+          amount: savedThisCycle, is_positive: true,
+          date: todayISO, created_at: now.toISOString(),
+        })
+      }
+      newTxns.unshift({
+        id: crypto.randomUUID(), user_id: 'guest',
+        icon: '💵', bg: 'var(--blue-dim)',
+        name: payLabel + ' received', cat: 'Income',
+        amount: income, is_positive: true,
+        date: todayISO, created_at: now.toISOString(),
+      })
+      guestUpdate({
+        wallet: income,
+        cycle_income: income,
+        has_first_pay: true,
+        last_paid_date: now.toISOString(),
+        last_cycle_saved: newLastSaved,
+        cycle_spending: {},
+        total_savings: total_savings + savedThisCycle,
+        months: newMonths,
+        transactions: newTxns,
+        fixed: fixedExpenses.map(e => ({ ...e, paid_this_cycle: false })),
+      })
+      setPaidLoading(false)
+      setPaidBtn('done')
+      setTimeout(() => setPaidBtn('idle'), 2500)
+      return
+    }
+
+    // ── Authenticated branch ──────────────────────────────────────────────────
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setPaidLoading(false); return }
 
-    const now = new Date()
-    const dateStr = now.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
-    const todayISO = now.toISOString().split('T')[0]
-    let savedThisCycle = 0
+    // Write sensitive values via vault
+    await writeVault({
+      total_savings: total_savings + savedThisCycle,
+      months: newMonths,
+      wallet: income,
+      cycle_income: income,
+      last_cycle_saved: newLastSaved,
+    })
 
-    // 1. Lock in previous cycle savings
-    if (has_first_pay && wallet > 0) {
-      savedThisCycle = wallet
-      const newMonths = [...months]
-      newMonths[cm] = (newMonths[cm] || 0) + wallet
-
-      await supabase.from('monthly_savings').upsert({
-        user_id: user.id,
-        year: now.getFullYear(),
-        months: newMonths,
-      })
-
-      await supabase.from('profiles').update({
-        total_savings: total_savings + wallet,
-        updated_at: now.toISOString(),
-      }).eq('user_id', user.id)
-
-      await supabase.from('transactions').insert({
-        user_id: user.id,
-        icon: '🏦',
-        bg: 'var(--accent-dim)',
-        name: 'Cycle savings',
-        cat: 'Savings',
-        amount: wallet,
-        is_positive: true,
-        date: todayISO,
-      })
-    }
-
-    // 2. Reset all bills
+    // Non-sensitive: reset bills, insert transactions, update cycle_state
     await supabase.from('fixed_expenses')
       .update({ paid_this_cycle: false })
       .eq('user_id', user.id)
 
-    // 3. Insert pay received transaction
-    const payLabel = cadence === 'weekly' ? 'Weekly pay' : cadence === 'fortnightly' ? 'Fortnightly pay' : 'Monthly pay'
+    if (savedThisCycle > 0) {
+      await supabase.from('transactions').insert({
+        user_id: user.id,
+        icon: '🏦', bg: 'var(--accent-dim)',
+        name: 'Cycle savings', cat: 'Savings',
+        amount: savedThisCycle, is_positive: true,
+        date: todayISO,
+      })
+    }
+
     await supabase.from('transactions').insert({
       user_id: user.id,
-      icon: '💵',
-      bg: 'var(--blue-dim)',
-      name: payLabel + ' received',
-      cat: 'Income',
-      amount: income,
-      is_positive: true,
+      icon: '💵', bg: 'var(--blue-dim)',
+      name: payLabel + ' received', cat: 'Income',
+      amount: income, is_positive: true,
       date: todayISO,
     })
 
-    // 4. Update cycle_state
-    const newLastSaved = has_first_pay ? (wallet <= 0 ? 0 : wallet) : null
     await supabase.from('cycle_state').update({
-      wallet: income,
-      cycle_income: income,
       has_first_pay: true,
       last_paid_date: now.toISOString(),
-      last_cycle_saved: newLastSaved,
       cycle_spending: {},
       updated_at: now.toISOString(),
     }).eq('user_id', user.id)
@@ -135,21 +163,44 @@ export default function DashboardClient() {
   async function payBill(bill: FixedExpense) {
     if (payingId || bill.paid_this_cycle) return
     setPayingId(bill.id)
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setPayingId(null); return }
 
     const billAmt = bill.amount / (bill.split || 1)
     const newWallet = wallet - billAmt
     const newSpending = { ...cycle_spending }
     newSpending[bill.cat] = (newSpending[bill.cat] || 0) + billAmt
+    const todayISO = new Date().toISOString().split('T')[0]
+
+    // ── Guest branch ──────────────────────────────────────────────────────────
+    if (isGuest) {
+      guestUpdate({
+        wallet: newWallet,
+        cycle_spending: newSpending,
+        fixed: fixedExpenses.map(e => e.id === bill.id ? { ...e, paid_this_cycle: true } : e),
+        transactions: [{
+          id: crypto.randomUUID(), user_id: 'guest',
+          icon: getCatIcon(bill.cat, customCats),
+          bg: getCatBg(bill.cat, customCats),
+          name: bill.name, cat: bill.cat,
+          amount: billAmt, is_positive: false,
+          date: todayISO, created_at: new Date().toISOString(),
+        }, ...transactions],
+      })
+      setPayingId(null)
+      return
+    }
+
+    // ── Authenticated branch ──────────────────────────────────────────────────
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setPayingId(null); return }
+
+    await writeVault({ wallet: newWallet })
 
     await supabase.from('fixed_expenses')
       .update({ paid_this_cycle: true })
       .eq('id', bill.id)
 
     await supabase.from('cycle_state').update({
-      wallet: newWallet,
       cycle_spending: newSpending,
       updated_at: new Date().toISOString(),
     }).eq('user_id', user.id)
@@ -158,11 +209,9 @@ export default function DashboardClient() {
       user_id: user.id,
       icon: getCatIcon(bill.cat, customCats),
       bg: getCatBg(bill.cat, customCats),
-      name: bill.name,
-      cat: bill.cat,
-      amount: billAmt,
-      is_positive: false,
-      date: new Date().toISOString().split('T')[0],
+      name: bill.name, cat: bill.cat,
+      amount: billAmt, is_positive: false,
+      date: todayISO,
     })
 
     await refetch()
@@ -196,11 +245,11 @@ export default function DashboardClient() {
       const def = CAT_DEFS[cat] ?? CAT_DEFS['Other']
       segs.push({ label: cat, amt, color: def.bar, dot: def.dot, tc: def.tc })
     })
-    segs.push({ label: 'Groceries',     amt: grocM(groceries),     color: CAT_DEFS['Groceries'].bar,     dot: CAT_DEFS['Groceries'].dot,     tc: CAT_DEFS['Groceries'].tc })
-    segs.push({ label: 'Dining',        amt: diningM(dining),       color: CAT_DEFS['Dining'].bar,        dot: CAT_DEFS['Dining'].dot,        tc: CAT_DEFS['Dining'].tc })
-    segs.push({ label: 'Transport',     amt: transM(transport),     color: CAT_DEFS['Transport'].bar,     dot: CAT_DEFS['Transport'].dot,     tc: CAT_DEFS['Transport'].tc })
-    segs.push({ label: 'Entertainment', amt: entM(entertainment),   color: CAT_DEFS['Entertainment'].bar, dot: CAT_DEFS['Entertainment'].dot, tc: CAT_DEFS['Entertainment'].tc })
-    segs.push({ label: 'Projected left', amt: Math.max(0, left),   color: 'var(--surface3)',              dot: 'var(--surface3)',              tc: 'var(--text3)' })
+    segs.push({ label: 'Groceries',     amt: grocM(groceries),   color: CAT_DEFS['Groceries'].bar,     dot: CAT_DEFS['Groceries'].dot,     tc: CAT_DEFS['Groceries'].tc })
+    segs.push({ label: 'Dining',        amt: diningM(dining),     color: CAT_DEFS['Dining'].bar,        dot: CAT_DEFS['Dining'].dot,        tc: CAT_DEFS['Dining'].tc })
+    segs.push({ label: 'Transport',     amt: transM(transport),   color: CAT_DEFS['Transport'].bar,     dot: CAT_DEFS['Transport'].dot,     tc: CAT_DEFS['Transport'].tc })
+    segs.push({ label: 'Entertainment', amt: entM(entertainment), color: CAT_DEFS['Entertainment'].bar, dot: CAT_DEFS['Entertainment'].dot, tc: CAT_DEFS['Entertainment'].tc })
+    segs.push({ label: 'Projected left', amt: Math.max(0, left), color: 'var(--surface3)',              dot: 'var(--surface3)',              tc: 'var(--text3)' })
     barTotal = monthInc || 1
   }
 

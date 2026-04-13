@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useAppState } from '@/context/AppStateContext'
+import { writeVault } from '@/lib/vault'
 import { CAT_NAMES, getCatDef, getAllCatNames } from '@/lib/categories'
 import { fixedTotal } from '@/lib/finance'
 import type { Cadence } from '@/lib/types'
@@ -26,7 +27,7 @@ interface CatRow {
 
 export default function SettingsClient() {
   const router = useRouter()
-  const { profile, fixedExpenses, customCats, loading, refetch } = useAppState()
+  const { profile, fixedExpenses, customCats, loading, isGuest, refetch, guestUpdate } = useAppState()
 
   // Profile fields
   const [name,          setName]          = useState('')
@@ -117,30 +118,76 @@ export default function SettingsClient() {
   // ── Save ──────────────────────────────────────────────────────────────────────
   async function save() {
     setSaving(true)
+    const validFixed = fixed.filter(e => e.name.trim() && e.amount > 0)
+
+    // ── Guest branch ──────────────────────────────────────────────────────────
+    if (isGuest) {
+      guestUpdate({
+        name: name || 'User',
+        income,
+        cadence,
+        extra,
+        groceries,
+        dining,
+        transport,
+        entertainment,
+        monthly_target: monthlyTarget,
+        goal_name: goalName || 'Savings goal',
+        total_savings: totalSavings,
+        fixed: validFixed.map((e, i) => ({
+          id: e.id || crypto.randomUUID(),
+          user_id: 'guest',
+          name: e.name.trim(),
+          amount: e.amount,
+          cat: e.cat,
+          split: Math.max(1, e.split || 1),
+          paid_this_cycle: e.paid_this_cycle,
+          sort_order: i,
+          created_at: '',
+        })),
+        customCats: catList.map((c, i) => ({
+          id: c.id || crypto.randomUUID(),
+          user_id: 'guest',
+          name: c.name,
+          icon: c.icon || '🏷',
+          sort_order: i,
+          created_at: '',
+        })),
+      })
+      setSaving(false)
+      setSaveState('done')
+      setTimeout(() => setSaveState('idle'), 3000)
+      return
+    }
+
+    // ── Authenticated branch ──────────────────────────────────────────────────
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setSaving(false); return }
 
-    // 1. Update profile
+    // Sensitive fields → vault
+    await writeVault({
+      income,
+      total_savings: totalSavings,
+      monthly_target: monthlyTarget,
+    })
+
+    // Non-sensitive profile fields → Supabase
     await supabase.from('profiles').update({
       name:           name || 'User',
-      income,
       cadence,
       extra,
       groceries,
       dining,
       transport,
       entertainment,
-      monthly_target: monthlyTarget,
       goal_name:      goalName || 'Savings goal',
-      total_savings:  totalSavings,
       updated_at:     new Date().toISOString(),
     }).eq('user_id', user.id)
 
-    // 2. Diff fixed expenses
-    const validFixed  = fixed.filter(e => e.name.trim() && e.amount > 0)
-    const keptIds     = new Set(validFixed.filter(e => e.id).map(e => e.id!))
-    const deletedIds  = fixedExpenses.map(e => e.id).filter(id => !keptIds.has(id))
+    // Diff fixed expenses
+    const keptIds    = new Set(validFixed.filter(e => e.id).map(e => e.id!))
+    const deletedIds = fixedExpenses.map(e => e.id).filter(id => !keptIds.has(id))
 
     if (deletedIds.length > 0) {
       await supabase.from('fixed_expenses').delete().in('id', deletedIds)
@@ -150,18 +197,18 @@ export default function SettingsClient() {
       await supabase.from('fixed_expenses').upsert(
         validFixed.map((e, i) => ({
           ...(e.id ? { id: e.id } : {}),
-          user_id:          user.id,
-          name:             e.name.trim(),
-          amount:           e.amount,
-          cat:              e.cat,
-          split:            Math.max(1, e.split || 1),
-          paid_this_cycle:  e.paid_this_cycle,
-          sort_order:       i,
+          user_id:         user.id,
+          name:            e.name.trim(),
+          amount:          e.amount,
+          cat:             e.cat,
+          split:           Math.max(1, e.split || 1),
+          paid_this_cycle: e.paid_this_cycle,
+          sort_order:      i,
         }))
       )
     }
 
-    // 3. Replace custom categories
+    // Replace custom categories
     await supabase.from('custom_categories').delete().eq('user_id', user.id)
     if (catList.length > 0) {
       await supabase.from('custom_categories').insert(
@@ -182,6 +229,13 @@ export default function SettingsClient() {
 
   // ── Sign out ──────────────────────────────────────────────────────────────────
   async function signOut() {
+    if (isGuest) {
+      document.cookie = 'pm_guest=1; path=/; max-age=0'
+      localStorage.removeItem('pm_guest_data')
+      router.push('/login')
+      router.refresh()
+      return
+    }
     const supabase = createClient()
     await supabase.auth.signOut()
     router.push('/login')
@@ -461,17 +515,21 @@ export default function SettingsClient() {
       <div className={s.section} style={{ marginTop: 32 }}>
         <div className={s.sectionTitle}>Account</div>
         <div className={s.card}>
-          <div className={s.row}>
-            <div className={s.rowLabel}>
-              <div className={s.rowName}>Import from Ledge</div>
-              <div className={s.rowSub}>Migrate data from the original Ledge browser app</div>
+          {!isGuest && (
+            <div className={s.row}>
+              <div className={s.rowLabel}>
+                <div className={s.rowName}>Import from Ledge</div>
+                <div className={s.rowSub}>Migrate data from the original Ledge browser app</div>
+              </div>
+              <div className={s.rowControl}>
+                <button className={s.migrateBtn} type="button" onClick={() => router.push('/migrate')}>Import</button>
+              </div>
             </div>
-            <div className={s.rowControl}>
-              <button className={s.migrateBtn} type="button" onClick={() => router.push('/migrate')}>Import</button>
-            </div>
-          </div>
+          )}
         </div>
-        <button className={s.signOutBtn} onClick={signOut}>Sign out</button>
+        <button className={s.signOutBtn} onClick={signOut}>
+          {isGuest ? 'Exit guest mode' : 'Sign out'}
+        </button>
       </div>
     </div>
   )

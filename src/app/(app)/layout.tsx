@@ -2,6 +2,7 @@ import { ThemeProvider } from '@/context/ThemeContext'
 import { AppStateProvider } from '@/context/AppStateContext'
 import Sidebar from '@/components/Sidebar'
 import MobileNav from '@/components/MobileNav'
+import GuestBanner from '@/components/GuestBanner'
 import s from './shell.module.css'
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -18,6 +19,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
 
           <main className={s.main}>
+            <GuestBanner />
             {children}
           </main>
         </div>

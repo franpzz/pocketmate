@@ -3,13 +3,15 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAppState } from '@/context/AppStateContext'
+import { writeVault } from '@/lib/vault'
 import { getAllCatNames, getCatIcon, getCatBg } from '@/lib/categories'
+import type { Transaction } from '@/lib/types'
 import s from './log.module.css'
 
 const NUMPAD = ['1','2','3','4','5','6','7','8','9','0','.','⌫']
 
 export default function LogClient() {
-  const { profile, cycleState, customCats, loading, refetch } = useAppState()
+  const { profile, cycleState, customCats, loading, isGuest, refetch, guestUpdate, transactions } = useAppState()
 
   const [logType, setLogType]       = useState<'expense' | 'income'>('expense')
   const [amount, setAmount]         = useState('0')
@@ -41,32 +43,61 @@ export default function LogClient() {
     if (!amt || amt <= 0) return
     setSubmitting(true)
 
+    const now = new Date()
+    const todayISO = now.toISOString().split('T')[0]
+    const cs = cycleState!
+
+    // ── Guest branch ──────────────────────────────────────────────────────────
+    if (isGuest) {
+      const newTxn: Transaction = {
+        id: crypto.randomUUID(),
+        user_id: 'guest',
+        icon: isIncome ? '💵' : getCatIcon(selectedCat, customCats),
+        bg: isIncome ? 'var(--blue-dim)' : getCatBg(selectedCat, customCats),
+        name: note.trim() || (isIncome ? 'Income received' : `${selectedCat} expense`),
+        cat: isIncome ? 'Income' : selectedCat,
+        amount: amt,
+        is_positive: isIncome,
+        date: todayISO,
+        created_at: now.toISOString(),
+      }
+
+      const updates: Parameters<typeof guestUpdate>[0] = {
+        transactions: [newTxn, ...transactions],
+      }
+
+      if (isIncome) {
+        if (cs.has_first_pay) updates.wallet = cs.wallet + amt
+      } else {
+        const newSpending = { ...cs.cycle_spending }
+        newSpending[selectedCat] = (newSpending[selectedCat] || 0) + amt
+        updates.cycle_spending = newSpending
+        if (cs.has_first_pay) updates.wallet = cs.wallet - amt
+      }
+
+      guestUpdate(updates)
+      setAmount('0')
+      setNote('')
+      setSubmitting(false)
+      setBtnState('done')
+      setTimeout(() => setBtnState('idle'), 1500)
+      return
+    }
+
+    // ── Authenticated branch ──────────────────────────────────────────────────
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setSubmitting(false); return }
 
-    const now = new Date()
-    const todayISO = now.toISOString().split('T')[0]
-
-    // Snapshot for TypeScript narrowing inside async body
-    const cs = cycleState!
-
     if (isIncome) {
       await supabase.from('transactions').insert({
         user_id: user.id,
-        icon: '💵',
-        bg: 'var(--blue-dim)',
+        icon: '💵', bg: 'var(--blue-dim)',
         name: note.trim() || 'Income received',
-        cat: 'Income',
-        amount: amt,
-        is_positive: true,
-        date: todayISO,
+        cat: 'Income', amount: amt, is_positive: true, date: todayISO,
       })
       if (cs.has_first_pay) {
-        await supabase.from('cycle_state').update({
-          wallet: cs.wallet + amt,
-          updated_at: now.toISOString(),
-        }).eq('user_id', user.id)
+        await writeVault({ wallet: cs.wallet + amt })
       }
     } else {
       const newSpending = { ...cs.cycle_spending }
@@ -77,14 +108,12 @@ export default function LogClient() {
         icon: getCatIcon(selectedCat, customCats),
         bg: getCatBg(selectedCat, customCats),
         name: note.trim() || `${selectedCat} expense`,
-        cat: selectedCat,
-        amount: amt,
-        is_positive: false,
-        date: todayISO,
+        cat: selectedCat, amount: amt, is_positive: false, date: todayISO,
       })
 
+      await writeVault({ wallet: cs.has_first_pay ? cs.wallet - amt : cs.wallet })
+
       await supabase.from('cycle_state').update({
-        wallet: cs.has_first_pay ? cs.wallet - amt : cs.wallet,
         cycle_spending: newSpending,
         updated_at: now.toISOString(),
       }).eq('user_id', user.id)
