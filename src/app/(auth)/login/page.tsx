@@ -56,7 +56,7 @@ export default function LoginPage() {
   return (
     <div className={s.screen}>
       <div className={s.card}>
-        <div className={s.logo}>PocketMate</div>
+        <img src="/Logo.png" alt="PocketMate" style={{ width: 140, marginBottom: 8 }} />
         <h1 className={s.title}>Welcome back.</h1>
         <p className={s.sub}>Sign in to your account to continue.</p>
 

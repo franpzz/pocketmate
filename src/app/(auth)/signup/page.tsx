@@ -184,7 +184,7 @@ export default function SignupPage() {
     return (
       <div className={s.screen}>
         <div className={s.card}>
-          <div className={s.logo}>PocketMate</div>
+          <img src="/Logo.png" alt="PocketMate" style={{ width: 140, marginBottom: 8 }} />
           <h1 className={s.title}>Check your email.</h1>
           <p className={s.sub}>
             We&apos;ve sent a confirmation link to <strong>{email}</strong>.
@@ -206,7 +206,7 @@ export default function SignupPage() {
   return (
     <div className={s.screen}>
       <div className={s.card}>
-        <div className={s.logo}>PocketMate</div>
+        <img src="/Logo.png" alt="PocketMate" style={{ width: 140, marginBottom: 8 }} />
         <div className={s.dots}>{dots}</div>
 
         {/* ── STEP 0 — About you ── */}
