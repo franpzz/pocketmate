@@ -229,21 +229,52 @@ export default function DashboardClient() {
   }
 
   // ── Delete a transaction ──────────────────────────────────────────────────────
-  async function deleteDashboardTxn(id: string) {
+  async function deleteDashboardTxn(t: Transaction) {
     if (deletingTxnId) return
-    setDeletingTxnId(id)
+    setDeletingTxnId(t.id)
+
+    // Restore wallet only for current-cycle expenses
+    const restoreWallet = !t.is_positive &&
+      has_first_pay &&
+      cycleState?.last_paid_date != null &&
+      t.date >= cycleState.last_paid_date.split('T')[0]
 
     if (isGuest) {
       const current = JSON.parse(localStorage.getItem('pm_guest_data') || '{}')
-      const updated = (current.transactions ?? []).filter((t: { id: string }) => t.id !== id)
-      guestUpdate({ transactions: updated })
+      const updatedTxns = (current.transactions ?? []).filter((tx: { id: string }) => tx.id !== t.id)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const updates: any = { transactions: updatedTxns }
+
+      if (restoreWallet) {
+        const newSpending = { ...(current.cycle_spending ?? {}) }
+        newSpending[t.cat] = Math.max(0, (newSpending[t.cat] || 0) - t.amount)
+        updates.cycle_spending = newSpending
+        updates.wallet = (current.wallet ?? 0) + t.amount
+      }
+
+      guestUpdate(updates)
       setConfirmTxnId(null)
       setDeletingTxnId(null)
       return
     }
 
     const supabase = createClient()
-    await supabase.from('transactions').delete().eq('id', id)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setDeletingTxnId(null); return }
+
+    if (restoreWallet) {
+      const newSpending = { ...cycle_spending }
+      newSpending[t.cat] = Math.max(0, (newSpending[t.cat] || 0) - t.amount)
+      await Promise.all([
+        writeVault({ wallet: wallet + t.amount }),
+        supabase.from('cycle_state').update({
+          cycle_spending: newSpending,
+          updated_at: new Date().toISOString(),
+        }).eq('user_id', user.id),
+      ])
+    }
+
+    await supabase.from('transactions').delete().eq('id', t.id)
     setConfirmTxnId(null)
     setDeletingTxnId(null)
     await refetch()
@@ -668,7 +699,7 @@ export default function DashboardClient() {
                     <div className={s.confirmActions}>
                       <button
                         className={s.confirmDelete}
-                        onClick={() => deleteDashboardTxn(t.id)}
+                        onClick={() => deleteDashboardTxn(t)}
                         disabled={deletingTxnId === t.id}
                       >
                         {deletingTxnId === t.id ? '…' : 'Delete'}

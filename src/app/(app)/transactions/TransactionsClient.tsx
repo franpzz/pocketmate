@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAppState } from '@/context/AppStateContext'
+import { writeVault } from '@/lib/vault'
+import type { Transaction } from '@/lib/types'
 import s from './transactions.module.css'
 
 const MONTH_NAMES_LONG = ['January','February','March','April','May','June','July','August','September','October','November','December']
@@ -16,7 +18,7 @@ function fmtDate(iso: string) {
 }
 
 export default function TransactionsClient() {
-  const { transactions, loading, isGuest, refetch, guestUpdate } = useAppState()
+  const { transactions, cycleState, loading, isGuest, refetch, guestUpdate } = useAppState()
   const [filter, setFilter] = useState<'all' | 'expenses' | 'income'>('all')
   const [confirmId, setConfirmId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -47,21 +49,54 @@ export default function TransactionsClient() {
     return y === year ? name : `${name} ${y}`
   }
 
-  async function deleteTransaction(id: string) {
+  // Whether a transaction is from the current pay cycle
+  function isCurrentCycle(t: Transaction): boolean {
+    if (!cycleState?.has_first_pay || !cycleState.last_paid_date) return false
+    return t.date >= cycleState.last_paid_date.split('T')[0]
+  }
+
+  async function deleteTransaction(t: Transaction) {
     if (deletingId) return
-    setDeletingId(id)
+    setDeletingId(t.id)
+
+    const restoreWallet = !t.is_positive && isCurrentCycle(t)
 
     if (isGuest) {
       const current = JSON.parse(localStorage.getItem('pm_guest_data') || '{}')
-      const updated = (current.transactions ?? []).filter((t: { id: string }) => t.id !== id)
-      guestUpdate({ transactions: updated })
+      const updatedTxns = (current.transactions ?? []).filter((tx: { id: string }) => tx.id !== t.id)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const updates: any = { transactions: updatedTxns }
+
+      if (restoreWallet) {
+        const newSpending = { ...(current.cycle_spending ?? {}) }
+        newSpending[t.cat] = Math.max(0, (newSpending[t.cat] || 0) - t.amount)
+        updates.cycle_spending = newSpending
+        updates.wallet = (current.wallet ?? 0) + t.amount
+      }
+
+      guestUpdate(updates)
       setConfirmId(null)
       setDeletingId(null)
       return
     }
 
     const supabase = createClient()
-    await supabase.from('transactions').delete().eq('id', id)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setDeletingId(null); return }
+
+    if (restoreWallet && cycleState) {
+      const newSpending = { ...cycleState.cycle_spending }
+      newSpending[t.cat] = Math.max(0, (newSpending[t.cat] || 0) - t.amount)
+      await Promise.all([
+        writeVault({ wallet: cycleState.wallet + t.amount }),
+        supabase.from('cycle_state').update({
+          cycle_spending: newSpending,
+          updated_at: new Date().toISOString(),
+        }).eq('user_id', user.id),
+      ])
+    }
+
+    await supabase.from('transactions').delete().eq('id', t.id)
     setConfirmId(null)
     setDeletingId(null)
     await refetch()
@@ -120,7 +155,7 @@ export default function TransactionsClient() {
                       <div className={s.confirmActions}>
                         <button
                           className={s.confirmDelete}
-                          onClick={() => deleteTransaction(t.id)}
+                          onClick={() => deleteTransaction(t)}
                           disabled={deletingId === t.id}
                         >
                           {deletingId === t.id ? '…' : 'Delete'}
