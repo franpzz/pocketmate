@@ -131,6 +131,10 @@
 .sendBtn:hover { background: var(--accent-mid); }
 
 @media (max-width: 700px) {
-  .chatWrap  { height: calc(100vh - 240px); }
+  /* mobile header ~50px + bottom nav ~65px + page header ~70px + padding ~32px */
+  .chatWrap  { height: calc(100dvh - 220px); min-height: 300px; }
   .pageTitle { font-size: 22px; }
+  .msg       { max-width: 92%; }
+  .quickPrompts { gap: 6px; }
+  .qp        { font-size: 11px; padding: 6px 10px; }
 }

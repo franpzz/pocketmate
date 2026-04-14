@@ -92,4 +92,6 @@
 @media (max-width: 700px) {
   .pageHeader { flex-direction: column; gap: 12px; }
   .pageTitle  { font-size: 22px; }
+  .filterRow  { flex-wrap: wrap; }
+  .card       { padding: 16px; }
 }

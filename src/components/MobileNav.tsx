@@ -24,7 +24,7 @@ export default function MobileNav() {
     <>
       {/* Mobile top header */}
       <header className={s.mobileHeader}>
-        <div className={s.mobLogo}>PocketMate</div>
+        <img src="/Logo.png" alt="PocketMate" className={s.mobLogo} />
         <div className={s.mobRight}>
           <button className={s.themeBtn} onClick={toggle}>
             {theme === 'dark' ? '☀' : '🌙'}

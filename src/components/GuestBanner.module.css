@@ -67,3 +67,10 @@
   transition: all 0.2s;
 }
 .btnExit:hover { border-color: var(--red); color: var(--red); }
+
+@media (max-width: 480px) {
+  .banner  { gap: 10px; }
+  .text    { min-width: 0; }
+  .actions { width: 100%; }
+  .btnCreate, .btnExit { flex: 1; text-align: center; }
+}

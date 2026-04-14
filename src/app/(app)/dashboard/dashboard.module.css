@@ -632,8 +632,21 @@
   .pageHeader      { flex-direction: column; gap: 10px; }
   .pageTitle       { font-size: 22px; }
   .themeBtn        { display: none; }
+  .card            { padding: 16px; }
+  .sumCard         { padding: 14px 16px; }
+  .balanceBarWrap  { padding: 16px; }
+  .bbc             { padding: 12px 14px; }
+  /* Monthly grid: 6 cols × 2 rows instead of 12 × 1 */
+  .monthlyGrid     { grid-template-columns: repeat(6, 1fr); gap: 6px; }
+  .monthPipBar     { height: 50px; }
+  .monthPipLbl     { font-size: 8px; }
+  .balLegend       { gap: 12px; }
+  .barLabel        { width: 70px; font-size: 11px; }
+  .barAmt          { width: 48px; font-size: 11px; }
 }
 
 @media (max-width: 420px) {
-  .sumValue { font-size: 22px; }
+  .sumValue        { font-size: 22px; }
+  .summaryRow      { gap: 8px; }
+  .bannerAmt       { font-size: 26px; }
 }

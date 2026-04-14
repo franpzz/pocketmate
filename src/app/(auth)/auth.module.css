@@ -300,7 +300,8 @@
 }
 
 @media (max-width: 520px) {
-  .card { padding: 28px 20px; border-radius: 16px; }
+  .screen { padding: 20px 12px; align-items: flex-start; }
+  .card   { padding: 24px 18px; border-radius: 16px; }
   .expenseRow { grid-template-columns: 1fr 80px 32px; }
   .expenseRow select,
   .expenseRow .splitWrap { display: none; }

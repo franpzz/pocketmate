@@ -414,13 +414,19 @@
 .signOutBtn:hover { border-color: var(--red); color: var(--red); }
 
 @media (max-width: 700px) {
-  .row        { flex-direction: column; align-items: flex-start; gap: 10px; }
-  .rowControl { width: 100%; }
+  .row         { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .rowControl  { width: 100%; }
   .inputPrefix { width: 100%; }
   .cadenceBtns { width: 100%; }
-  .cadenceBtn { flex: 1; }
-  .textInput  { width: 100%; }
-  .pageTitle  { font-size: 22px; }
-  .fixedRow   { flex-wrap: wrap; }
-  .feNameInput { min-width: 100%; }
+  .cadenceBtn  { flex: 1; text-align: center; }
+  .textInput   { width: 100%; }
+  .pageTitle   { font-size: 22px; }
+  /* Fixed expense rows: name full width on top, controls below */
+  .fixedRow    { flex-wrap: wrap; gap: 8px; padding: 12px 14px; }
+  .fixedDot    { display: none; }
+  .feNameInput { min-width: 100%; order: -1; border-bottom: 1px solid var(--border2); padding-bottom: 8px; }
+  .feCatSelect { flex: 1; width: auto; }
+  .feAmtWrap   { flex: 1; width: auto; }
+  .splitWrap   { width: 60px; }
+  .saveBtn     { max-width: 100%; }
 }

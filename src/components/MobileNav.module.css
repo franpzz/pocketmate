@@ -12,9 +12,9 @@
 }
 
 .mobLogo {
-  font-family: var(--font-serif);
-  font-size: 20px;
-  color: var(--accent);
+  height: 40px;
+  width: auto;
+  display: block;
 }
 
 .mobRight {
