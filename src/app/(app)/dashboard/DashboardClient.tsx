@@ -8,7 +8,7 @@ import { writeVault } from '@/lib/vault'
 import {
   mul, monthlyIncome, fixedTotal,
   grocM, diningM, transM, entM,
-  totalOut, leftover, cycleLabel, ytd, currentMonth,
+  totalOut, leftover, cycleLeftover, cycleLabel, ytd, currentMonth,
 } from '@/lib/finance'
 import {
   CAT_DEFS, getCatDef, getCatIcon, getCatBg,
@@ -35,6 +35,9 @@ export default function DashboardClient() {
   const [paidLoading, setPaidLoading] = useState(false)
   const [paidBtn, setPaidBtn] = useState<'idle' | 'done'>('idle')
   const [payingId, setPayingId] = useState<string | null>(null)
+  const [showPayConfirm, setShowPayConfirm] = useState(false)
+  const [confirmTxnId, setConfirmTxnId] = useState<string | null>(null)
+  const [deletingTxnId, setDeletingTxnId] = useState<string | null>(null)
 
   if (loading) return <div className={s.loading}>Loading…</div>
   if (!profile || !cycleState) return <div className={s.loading}>No data found.</div>
@@ -53,6 +56,13 @@ export default function DashboardClient() {
   const lockedThisMonth = months[cm] ?? 0
   const paidOut = has_first_pay ? Math.max(0, cycle_income - wallet) : 0
   const label = cycleLabel(cadence)
+
+  const unpaidBillsTotal = fixedExpenses
+    .filter(e => !e.paid_this_cycle)
+    .reduce((a, e) => a + e.amount / (e.split || 1), 0)
+  const potentialSavings = has_first_pay
+    ? Math.max(0, wallet - unpaidBillsTotal)
+    : cycleLeftover(income, cadence, extra, fixedExpenses, groceries, dining, transport, entertainment)
 
   // ── "I Got Paid" ─────────────────────────────────────────────────────────────
   async function gotPaid() {
@@ -218,6 +228,27 @@ export default function DashboardClient() {
     setPayingId(null)
   }
 
+  // ── Delete a transaction ──────────────────────────────────────────────────────
+  async function deleteDashboardTxn(id: string) {
+    if (deletingTxnId) return
+    setDeletingTxnId(id)
+
+    if (isGuest) {
+      const current = JSON.parse(localStorage.getItem('pm_guest_data') || '{}')
+      const updated = (current.transactions ?? []).filter((t: { id: string }) => t.id !== id)
+      guestUpdate({ transactions: updated })
+      setConfirmTxnId(null)
+      setDeletingTxnId(null)
+      return
+    }
+
+    const supabase = createClient()
+    await supabase.from('transactions').delete().eq('id', id)
+    setConfirmTxnId(null)
+    setDeletingTxnId(null)
+    await refetch()
+  }
+
   // ── Balance bar segments ──────────────────────────────────────────────────────
   interface Seg { label: string; amt: number; color: string; dot: string; tc: string }
   let segs: Seg[] = []
@@ -308,7 +339,7 @@ export default function DashboardClient() {
     : `You'll receive ${fmt(income)} per ${label}`
 
   // ── Wallet card ───────────────────────────────────────────────────────────────
-  const walletColor = has_first_pay && wallet < 0 ? 'amber' : 'green'
+  const walletColor = potentialSavings === 0 ? 'amber' : 'green'
 
   return (
     <div>
@@ -336,22 +367,56 @@ export default function DashboardClient() {
         </div>
         <button
           className={s.btnPaid}
-          onClick={gotPaid}
+          onClick={() => setShowPayConfirm(true)}
           disabled={paidLoading}
         >
           {paidBtn === 'done' ? '✓ New cycle started!' : paidLoading ? 'Processing…' : '💰 I got paid'}
         </button>
       </div>
 
+      {/* Confirmation modal */}
+      {showPayConfirm && (
+        <div className={s.modalOverlay} onClick={() => setShowPayConfirm(false)}>
+          <div className={s.modal} onClick={e => e.stopPropagation()}>
+            <div className={s.modalTitle}>Start a new pay cycle?</div>
+            <div className={s.modalBody}>
+              {has_first_pay && wallet > 0 ? (
+                <>
+                  This will lock in <strong>{fmt(wallet)}</strong> as savings for this cycle,
+                  reset your wallet to <strong>{fmt(income)}</strong>, and mark all bills as unpaid.
+                </>
+              ) : has_first_pay ? (
+                <>
+                  This will reset your wallet to <strong>{fmt(income)}</strong> and mark all bills as unpaid.
+                  No savings will be recorded this cycle.
+                </>
+              ) : (
+                <>
+                  This will set your wallet to <strong>{fmt(income)}</strong> and start your first cycle.
+                </>
+              )}
+            </div>
+            <div className={s.modalActions}>
+              <button className={s.modalCancel} onClick={() => setShowPayConfirm(false)}>
+                Cancel
+              </button>
+              <button className={s.modalConfirm} onClick={() => { setShowPayConfirm(false); gotPaid() }}>
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Summary cards */}
       <div className={s.summaryRow}>
         <div className={s.sumCard}>
-          <div className={s.sumLabel}>Wallet</div>
+          <div className={s.sumLabel}>Potential savings</div>
           <div className={`${s.sumValue} ${s[walletColor]}`}>
-            {has_first_pay ? fmt(wallet) : '—'}
+            {fmt(potentialSavings)}
           </div>
           <div className={s.sumMeta}>
-            {!has_first_pay ? 'Tap "I got paid" to start' : wallet < 0 ? 'Overdrawn' : 'Available'}
+            {has_first_pay ? 'After remaining bills' : 'Projected this cycle'}
           </div>
         </div>
 
@@ -585,8 +650,9 @@ export default function DashboardClient() {
             {transactions.slice(0, 5).map(t => {
               const dateObj = new Date(t.date)
               const dateStr = dateObj.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
+              const isConfirming = confirmTxnId === t.id
               return (
-                <div key={t.id} className={s.txnItem}>
+                <div key={t.id} className={`${s.txnItem} ${isConfirming ? s.confirming : ''}`}>
                   <div className={s.txnIcon} style={{ background: t.bg }}>{t.icon}</div>
                   <div className={s.txnInfo}>
                     <div className={s.txnName}>{t.name}</div>
@@ -598,6 +664,31 @@ export default function DashboardClient() {
                     </div>
                     <div className={s.txnDate}>{dateStr}</div>
                   </div>
+                  {isConfirming ? (
+                    <div className={s.confirmActions}>
+                      <button
+                        className={s.confirmDelete}
+                        onClick={() => deleteDashboardTxn(t.id)}
+                        disabled={deletingTxnId === t.id}
+                      >
+                        {deletingTxnId === t.id ? '…' : 'Delete'}
+                      </button>
+                      <button
+                        className={s.confirmCancel}
+                        onClick={() => setConfirmTxnId(null)}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      className={s.delBtn}
+                      onClick={() => setConfirmTxnId(t.id)}
+                      aria-label="Delete transaction"
+                    >
+                      ×
+                    </button>
+                  )}
                 </div>
               )
             })}

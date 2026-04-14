@@ -27,7 +27,7 @@ interface CatRow {
 
 export default function SettingsClient() {
   const router = useRouter()
-  const { profile, fixedExpenses, customCats, loading, isGuest, refetch, guestUpdate } = useAppState()
+  const { profile, cycleState, fixedExpenses, customCats, loading, isGuest, refetch, guestUpdate } = useAppState()
 
   // Profile fields
   const [name,          setName]          = useState('')
@@ -50,6 +50,9 @@ export default function SettingsClient() {
   const [newCatName,  setNewCatName]  = useState('')
   const [newCatIcon,  setNewCatIcon]  = useState('')
 
+  // Wallet adjustment
+  const [wallet, setWallet] = useState(0)
+
   // Save state
   const [saving,    setSaving]    = useState(false)
   const [saveState, setSaveState] = useState<'idle' | 'done'>('idle')
@@ -69,6 +72,11 @@ export default function SettingsClient() {
     setGoalName(profile.goal_name)
     setTotalSavings(profile.total_savings)
   }, [profile])
+
+  useEffect(() => {
+    if (!cycleState) return
+    setWallet(cycleState.wallet)
+  }, [cycleState])
 
   useEffect(() => {
     setFixed(fixedExpenses.map(e => ({
@@ -134,6 +142,7 @@ export default function SettingsClient() {
         monthly_target: monthlyTarget,
         goal_name: goalName || 'Savings goal',
         total_savings: totalSavings,
+        wallet,
         fixed: validFixed.map((e, i) => ({
           id: e.id || crypto.randomUUID(),
           user_id: 'guest',
@@ -170,6 +179,7 @@ export default function SettingsClient() {
       income,
       total_savings: totalSavings,
       monthly_target: monthlyTarget,
+      wallet,
     })
 
     // Non-sensitive profile fields → Supabase
@@ -500,6 +510,24 @@ export default function SettingsClient() {
               </div>
             </div>
           </div>
+
+          {cycleState?.has_first_pay && (
+            <>
+              <div className={s.divider} />
+              <div className={s.row}>
+                <div className={s.rowLabel}>
+                  <div className={s.rowName}>Wallet balance</div>
+                  <div className={s.rowSub}>Correct your current cycle balance if it&apos;s drifted</div>
+                </div>
+                <div className={s.rowControl}>
+                  <div className={s.inputPrefix}>
+                    <span>$</span>
+                    <input type="number" value={wallet} onChange={e => setWallet(+e.target.value || 0)} />
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
 

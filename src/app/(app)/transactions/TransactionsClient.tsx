@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
 import { useAppState } from '@/context/AppStateContext'
 import s from './transactions.module.css'
 
@@ -15,8 +16,10 @@ function fmtDate(iso: string) {
 }
 
 export default function TransactionsClient() {
-  const { transactions, loading } = useAppState()
+  const { transactions, loading, isGuest, refetch, guestUpdate } = useAppState()
   const [filter, setFilter] = useState<'all' | 'expenses' | 'income'>('all')
+  const [confirmId, setConfirmId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const now = new Date()
   const cm = now.getMonth()
@@ -42,6 +45,26 @@ export default function TransactionsClient() {
     const [y, m] = key.split('-').map(Number)
     const name = MONTH_NAMES_LONG[m - 1]
     return y === year ? name : `${name} ${y}`
+  }
+
+  async function deleteTransaction(id: string) {
+    if (deletingId) return
+    setDeletingId(id)
+
+    if (isGuest) {
+      const current = JSON.parse(localStorage.getItem('pm_guest_data') || '{}')
+      const updated = (current.transactions ?? []).filter((t: { id: string }) => t.id !== id)
+      guestUpdate({ transactions: updated })
+      setConfirmId(null)
+      setDeletingId(null)
+      return
+    }
+
+    const supabase = createClient()
+    await supabase.from('transactions').delete().eq('id', id)
+    setConfirmId(null)
+    setDeletingId(null)
+    await refetch()
   }
 
   if (loading) return <div className={s.loading}>Loading…</div>
@@ -75,21 +98,52 @@ export default function TransactionsClient() {
           <div key={key} className={s.card} style={{ marginBottom: 16 }}>
             <div className={s.cardTitle}>{groupLabel(key)}</div>
             <div className={s.txnList}>
-              {groups[key].map(t => (
-                <div key={t.id} className={s.txnItem}>
-                  <div className={s.txnIcon} style={{ background: t.bg }}>{t.icon}</div>
-                  <div className={s.txnInfo}>
-                    <div className={s.txnName}>{t.name}</div>
-                    <div className={s.txnCat}>{t.cat}</div>
-                  </div>
-                  <div className={s.txnRight}>
-                    <div className={`${s.txnAmt} ${t.is_positive ? s.pos : s.neg}`}>
-                      {t.is_positive ? '+' : '−'}{fmt(t.amount)}
+              {groups[key].map(t => {
+                const isConfirming = confirmId === t.id
+                return (
+                  <div
+                    key={t.id}
+                    className={`${s.txnItem} ${isConfirming ? s.confirming : ''}`}
+                  >
+                    <div className={s.txnIcon} style={{ background: t.bg }}>{t.icon}</div>
+                    <div className={s.txnInfo}>
+                      <div className={s.txnName}>{t.name}</div>
+                      <div className={s.txnCat}>{t.cat}</div>
                     </div>
-                    <div className={s.txnDate}>{fmtDate(t.date)}</div>
+                    <div className={s.txnRight}>
+                      <div className={`${s.txnAmt} ${t.is_positive ? s.pos : s.neg}`}>
+                        {t.is_positive ? '+' : '−'}{fmt(t.amount)}
+                      </div>
+                      <div className={s.txnDate}>{fmtDate(t.date)}</div>
+                    </div>
+                    {isConfirming ? (
+                      <div className={s.confirmActions}>
+                        <button
+                          className={s.confirmDelete}
+                          onClick={() => deleteTransaction(t.id)}
+                          disabled={deletingId === t.id}
+                        >
+                          {deletingId === t.id ? '…' : 'Delete'}
+                        </button>
+                        <button
+                          className={s.confirmCancel}
+                          onClick={() => setConfirmId(null)}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        className={s.delBtn}
+                        onClick={() => setConfirmId(t.id)}
+                        aria-label="Delete transaction"
+                      >
+                        ×
+                      </button>
+                    )}
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </div>
         ))
