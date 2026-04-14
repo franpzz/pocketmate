@@ -8,7 +8,7 @@ import { writeVault } from '@/lib/vault'
 import {
   mul, monthlyIncome, fixedTotal,
   grocM, diningM, transM, entM,
-  totalOut, leftover, cycleLeftover, cycleLabel, ytd, currentMonth,
+  totalOut, leftover, cycleLabel, ytd, currentMonth,
 } from '@/lib/finance'
 import {
   CAT_DEFS, getCatDef, getCatIcon, getCatBg,
@@ -57,12 +57,6 @@ export default function DashboardClient() {
   const paidOut = has_first_pay ? Math.max(0, cycle_income - wallet) : 0
   const label = cycleLabel(cadence)
 
-  const unpaidBillsTotal = fixedExpenses
-    .filter(e => !e.paid_this_cycle)
-    .reduce((a, e) => a + e.amount / (e.split || 1), 0)
-  const potentialSavings = has_first_pay
-    ? Math.max(0, wallet - unpaidBillsTotal)
-    : cycleLeftover(income, cadence, extra, fixedExpenses, groceries, dining, transport, entertainment)
 
   // ── "I Got Paid" ─────────────────────────────────────────────────────────────
   async function gotPaid() {
@@ -370,7 +364,7 @@ export default function DashboardClient() {
     : `You'll receive ${fmt(income)} per ${label}`
 
   // ── Wallet card ───────────────────────────────────────────────────────────────
-  const walletColor = potentialSavings === 0 ? 'amber' : 'green'
+  const walletColor = has_first_pay && wallet < 0 ? 'amber' : 'green'
 
   return (
     <div>
@@ -441,16 +435,6 @@ export default function DashboardClient() {
 
       {/* Summary cards */}
       <div className={s.summaryRow}>
-        <div className={s.sumCard}>
-          <div className={s.sumLabel}>Potential savings</div>
-          <div className={`${s.sumValue} ${s[walletColor]}`}>
-            {fmt(potentialSavings)}
-          </div>
-          <div className={s.sumMeta}>
-            {has_first_pay ? 'After remaining bills' : 'Projected this cycle'}
-          </div>
-        </div>
-
         <div className={s.sumCard}>
           <div className={s.sumLabel}>Paid out</div>
           <div className={`${s.sumValue} ${s.red}`}>
