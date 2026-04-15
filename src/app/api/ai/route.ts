@@ -8,7 +8,7 @@ interface ChatMessage {
 export async function POST(req: NextRequest) {
   const key = process.env.GEMINI_API_KEY
   if (!key) {
-    return NextResponse.json({ error: 'AI not configured' }, { status: 503 })
+    return NextResponse.json({ error: 'not_configured' }, { status: 503 })
   }
 
   const { systemPrompt, messages } = await req.json() as {
@@ -28,16 +28,22 @@ export async function POST(req: NextRequest) {
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`
 
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
+  let res: Response
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+  } catch (err) {
+    console.error('Gemini fetch error:', err)
+    return NextResponse.json({ error: 'network_error' }, { status: 502 })
+  }
 
   if (!res.ok) {
-    const err = await res.text()
-    console.error('Gemini error:', err)
-    return NextResponse.json({ error: 'AI request failed' }, { status: 502 })
+    const errBody = await res.text()
+    console.error(`Gemini ${res.status}:`, errBody)
+    return NextResponse.json({ error: 'gemini_error', status: res.status, detail: errBody }, { status: 502 })
   }
 
   const data = await res.json()

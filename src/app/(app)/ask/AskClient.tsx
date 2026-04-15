@@ -105,9 +105,15 @@ RULES:
       })
 
       const data = await res.json()
-      const respText: string = res.ok
-        ? (data.text || 'Sorry, I got an empty response.')
-        : 'Sorry, I couldn\'t reach the AI right now. Please try again.'
+      let respText: string
+      if (res.ok) {
+        respText = data.text || 'Sorry, I got an empty response.'
+      } else if (res.status === 503) {
+        respText = 'AI is not configured yet. Add a **GEMINI_API_KEY** in your Vercel environment variables.'
+      } else {
+        console.error('AI error:', data)
+        respText = 'Sorry, I couldn\'t reach the AI right now. Please try again.'
+      }
 
       setMessages(prev => [...prev, { role: 'ai', text: respText, html: md(respText) }])
     } catch {
