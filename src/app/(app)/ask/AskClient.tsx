@@ -109,9 +109,9 @@ RULES:
       if (res.ok) {
         respText = data.text || 'Sorry, I got an empty response.'
       } else if (res.status === 503) {
-        respText = 'AI is not configured yet. Add a **GEMINI_API_KEY** in your Vercel environment variables.'
+        respText = 'AI is not configured yet. Add a **GROQ_API_KEY** in your Vercel environment variables.'
       } else if (data.status === 429) {
-        respText = 'Rate limit reached — the free Gemini tier allows 15 requests per minute. Please wait a moment and try again.'
+        respText = 'Rate limit reached — please wait a moment and try again.'
       } else {
         console.error('AI error:', data)
         respText = 'Sorry, I couldn\'t reach the AI right now. Please try again.'

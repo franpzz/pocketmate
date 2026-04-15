@@ -6,7 +6,7 @@ interface ChatMessage {
 }
 
 export async function POST(req: NextRequest) {
-  const key = process.env.GEMINI_API_KEY
+  const key = process.env.GROQ_API_KEY
   if (!key) {
     return NextResponse.json({ error: 'not_configured' }, { status: 503 })
   }
@@ -16,37 +16,43 @@ export async function POST(req: NextRequest) {
     messages: ChatMessage[]
   }
 
-  const contents = messages.map(m => ({
-    role: m.role === 'ai' ? 'model' : 'user',
-    parts: [{ text: m.text }],
-  }))
-
-  const body: Record<string, unknown> = { contents }
+  // Build OpenAI-compatible messages array
+  const groqMessages: { role: string; content: string }[] = []
   if (systemPrompt) {
-    body.systemInstruction = { parts: [{ text: systemPrompt }] }
+    groqMessages.push({ role: 'system', content: systemPrompt })
   }
-
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`
+  for (const m of messages) {
+    groqMessages.push({
+      role: m.role === 'ai' ? 'assistant' : 'user',
+      content: m.text,
+    })
+  }
 
   let res: Response
   try {
-    res = await fetch(url, {
+    res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${key}`,
+      },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        messages: groqMessages,
+      }),
     })
   } catch (err) {
-    console.error('Gemini fetch error:', err)
+    console.error('Groq fetch error:', err)
     return NextResponse.json({ error: 'network_error' }, { status: 502 })
   }
 
   if (!res.ok) {
     const errBody = await res.text()
-    console.error(`Gemini ${res.status}:`, errBody)
-    return NextResponse.json({ error: 'gemini_error', status: res.status, detail: errBody }, { status: 502 })
+    console.error(`Groq ${res.status}:`, errBody)
+    return NextResponse.json({ error: 'groq_error', status: res.status, detail: errBody }, { status: 502 })
   }
 
   const data = await res.json()
-  const text: string = data.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+  const text: string = data.choices?.[0]?.message?.content ?? ''
   return NextResponse.json({ text })
 }
