@@ -331,6 +331,13 @@
   cursor: default;
 }
 
+.billUpcoming {
+  font-size: 11px;
+  color: var(--text3);
+  white-space: nowrap;
+  padding: 6px 0;
+}
+
 /* DASH GRID */
 .dashGrid {
   display: grid;

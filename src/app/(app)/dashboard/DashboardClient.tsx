@@ -14,6 +14,31 @@ import {
   CAT_DEFS, getCatDef, getCatIcon, getCatBg,
 } from '@/lib/categories'
 import type { FixedExpense, Transaction } from '@/lib/types'
+
+// ── Bill status ────────────────────────────────────────────────────────────────
+type BillStatus = 'paid' | 'due' | 'upcoming'
+
+function billStatus(bill: FixedExpense): BillStatus {
+  const today = new Date()
+  const thisMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`
+
+  if (bill.due_day == null) {
+    return bill.paid_this_cycle ? 'paid' : 'due'
+  }
+
+  // Has a calendar due day
+  const paidThisMonth = bill.last_paid_date?.substring(0, 7) === thisMonth
+  if (paidThisMonth) return 'paid'
+  if (today.getDate() >= bill.due_day) return 'due'
+  return 'upcoming'
+}
+
+function ordinal(n: number) {
+  if (n === 1 || n === 21) return `${n}st`
+  if (n === 2 || n === 22) return `${n}nd`
+  if (n === 3 || n === 23) return `${n}rd`
+  return `${n}th`
+}
 import s from './dashboard.module.css'
 
 const MONTH_NAMES      = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
@@ -105,7 +130,8 @@ export default function DashboardClient() {
         total_savings: total_savings + savedThisCycle,
         months: newMonths,
         transactions: newTxns,
-        fixed: fixedExpenses.map(e => ({ ...e, paid_this_cycle: false })),
+        // Only reset bills that don't have a calendar due date
+        fixed: fixedExpenses.map(e => ({ ...e, paid_this_cycle: e.due_day != null ? e.paid_this_cycle : false })),
       })
       setPaidLoading(false)
       setPaidBtn('done')
@@ -127,10 +153,11 @@ export default function DashboardClient() {
       last_cycle_saved: newLastSaved,
     })
 
-    // Non-sensitive: reset bills, insert transactions, update cycle_state
+    // Non-sensitive: reset only bills without a calendar due date, insert transactions, update cycle_state
     await supabase.from('fixed_expenses')
       .update({ paid_this_cycle: false })
       .eq('user_id', user.id)
+      .is('due_day', null)
 
     if (savedThisCycle > 0) {
       await supabase.from('transactions').insert({
@@ -165,7 +192,7 @@ export default function DashboardClient() {
 
   // ── Pay a bill ────────────────────────────────────────────────────────────────
   async function payBill(bill: FixedExpense) {
-    if (payingId || bill.paid_this_cycle) return
+    if (payingId || billStatus(bill) !== 'due') return
     setPayingId(bill.id)
 
     const billAmt = bill.amount / (bill.split || 1)
@@ -179,7 +206,9 @@ export default function DashboardClient() {
       guestUpdate({
         wallet: newWallet,
         cycle_spending: newSpending,
-        fixed: fixedExpenses.map(e => e.id === bill.id ? { ...e, paid_this_cycle: true } : e),
+        fixed: fixedExpenses.map(e => e.id === bill.id
+          ? { ...e, paid_this_cycle: true, last_paid_date: todayISO }
+          : e),
         transactions: [{
           id: crypto.randomUUID(), user_id: 'guest',
           icon: getCatIcon(bill.cat, customCats),
@@ -201,7 +230,7 @@ export default function DashboardClient() {
     await writeVault({ wallet: newWallet })
 
     await supabase.from('fixed_expenses')
-      .update({ paid_this_cycle: true })
+      .update({ paid_this_cycle: true, last_paid_date: todayISO })
       .eq('id', bill.id)
 
     await supabase.from('cycle_state').update({
@@ -502,21 +531,29 @@ export default function DashboardClient() {
           fixedExpenses.map(bill => {
             const def = getCatDef(bill.cat, customCats)
             const billAmt = bill.amount / (bill.split || 1)
+            const status = billStatus(bill)
             return (
               <div key={bill.id} className={s.billItem}>
                 <div className={s.billDot} style={{ background: def.dot }} />
                 <div className={s.billInfo}>
                   <div className={s.billName}>{bill.name}</div>
-                  <div className={s.billSub}>{bill.cat}{bill.split > 1 ? ` ÷${bill.split}` : ''}</div>
+                  <div className={s.billSub}>
+                    {bill.cat}{bill.split > 1 ? ` ÷${bill.split}` : ''}
+                    {bill.due_day != null ? ` · due ${ordinal(bill.due_day)}` : ''}
+                  </div>
                 </div>
                 <span className={s.billAmt}>{fmt(billAmt)}</span>
-                <button
-                  className={`${s.billPayBtn} ${bill.paid_this_cycle ? s.paid : s.unpaid}`}
-                  onClick={() => !bill.paid_this_cycle && payBill(bill)}
-                  disabled={payingId === bill.id}
-                >
-                  {payingId === bill.id ? '…' : bill.paid_this_cycle ? '✓ Paid' : 'Pay'}
-                </button>
+                {status === 'upcoming' ? (
+                  <span className={s.billUpcoming}>Due {ordinal(bill.due_day!)}</span>
+                ) : (
+                  <button
+                    className={`${s.billPayBtn} ${status === 'paid' ? s.paid : s.unpaid}`}
+                    onClick={() => status === 'due' && payBill(bill)}
+                    disabled={payingId === bill.id}
+                  >
+                    {payingId === bill.id ? '…' : status === 'paid' ? '✓ Paid' : 'Pay'}
+                  </button>
+                )}
               </div>
             )
           })

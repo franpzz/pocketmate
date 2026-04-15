@@ -38,6 +38,8 @@ export interface FixedExpense {
   cat: string
   split: number
   paid_this_cycle: boolean
+  due_day: number | null        // 1–28, null = reset on "I got paid" (old behaviour)
+  last_paid_date: string | null // ISO date of last payment, used with due_day
   sort_order: number
   created_at: string
 }

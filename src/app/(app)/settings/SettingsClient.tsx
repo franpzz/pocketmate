@@ -17,6 +17,8 @@ interface FixedRow {
   amount: number
   split: number
   paid_this_cycle: boolean
+  due_day: number | null
+  last_paid_date: string | null
 }
 
 interface CatRow {
@@ -86,6 +88,8 @@ export default function SettingsClient() {
       amount: e.amount,
       split: e.split,
       paid_this_cycle: e.paid_this_cycle,
+      due_day: e.due_day ?? null,
+      last_paid_date: e.last_paid_date ?? null,
     })))
   }, [fixedExpenses])
 
@@ -96,12 +100,12 @@ export default function SettingsClient() {
   if (loading || !profile) return null
 
   // ── Fixed expense helpers ─────────────────────────────────────────────────────
-  function updateFixed(i: number, field: keyof FixedRow, value: string | number) {
+  function updateFixed(i: number, field: keyof FixedRow, value: string | number | null) {
     setFixed(prev => prev.map((r, idx) => idx === i ? { ...r, [field]: value } : r))
   }
 
   function addFixed() {
-    setFixed(prev => [...prev, { name: '', cat: 'Other', amount: 0, split: 1, paid_this_cycle: false }])
+    setFixed(prev => [...prev, { name: '', cat: 'Other', amount: 0, split: 1, paid_this_cycle: false, due_day: null, last_paid_date: null }])
   }
 
   function removeFixed(i: number) {
@@ -151,6 +155,8 @@ export default function SettingsClient() {
           cat: e.cat,
           split: Math.max(1, e.split || 1),
           paid_this_cycle: e.paid_this_cycle,
+          due_day: e.due_day ?? null,
+          last_paid_date: e.last_paid_date ?? null,
           sort_order: i,
           created_at: '',
         })),
@@ -213,7 +219,9 @@ export default function SettingsClient() {
           cat:             e.cat,
           split:           Math.max(1, e.split || 1),
           paid_this_cycle: e.paid_this_cycle,
+          due_day:         e.due_day ?? null,
           sort_order:      i,
+          // last_paid_date not included — Supabase preserves existing value on upsert
         }))
       )
     }
@@ -250,6 +258,13 @@ export default function SettingsClient() {
     await supabase.auth.signOut()
     router.push('/login')
     router.refresh()
+  }
+
+  function ordinal(n: number) {
+    if (n === 1 || n === 21) return `${n}st`
+    if (n === 2 || n === 22) return `${n}nd`
+    if (n === 3 || n === 23) return `${n}rd`
+    return `${n}th`
   }
 
   const fixedTotalAmt = fixed
@@ -387,6 +402,17 @@ export default function SettingsClient() {
                     onChange={e => updateFixed(i, 'split', Math.max(1, +e.target.value || 1))}
                   />
                 </div>
+                <select
+                  className={s.feDueSelect}
+                  value={row.due_day ?? ''}
+                  title="Due date (day of month)"
+                  onChange={e => updateFixed(i, 'due_day', e.target.value ? +e.target.value : null)}
+                >
+                  <option value=''>No date</option>
+                  {Array.from({ length: 28 }, (_, n) => n + 1).map(d => (
+                    <option key={d} value={d}>{ordinal(d)}</option>
+                  ))}
+                </select>
                 <button className={s.delBtn} type="button" onClick={() => removeFixed(i)}>✕</button>
               </div>
             )
