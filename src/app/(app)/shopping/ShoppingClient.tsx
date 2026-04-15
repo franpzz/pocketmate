@@ -16,21 +16,21 @@ const DIET_OPTIONS: { value: Diet; label: string }[] = [
 ]
 
 const FALLBACK_ITEMS: ShopItem[] = [
-  { name: 'Free range eggs (12pk)',  qty: '1 × 12pk', price: 5.50 },
-  { name: 'Full cream milk',         qty: '2L',        price: 3.20 },
-  { name: 'Chicken breast',          qty: '1kg',       price: 12.00 },
-  { name: 'Wholemeal bread',         qty: '1 loaf',    price: 3.80 },
-  { name: 'Greek yoghurt',           qty: '500g',      price: 4.50 },
+  { name: 'Free range eggs (12pk)',  qty: '1 × 12pk', price: 6.50 },
+  { name: 'Full cream milk',         qty: '2L',        price: 3.50 },
+  { name: 'Chicken breast',          qty: '1kg',       price: 11.00 },
+  { name: 'Wholemeal bread',         qty: '1 loaf',    price: 4.00 },
+  { name: 'Greek yoghurt',           qty: '500g',      price: 5.00 },
   { name: 'Mixed salad leaves',      qty: '120g bag',  price: 3.50 },
   { name: 'Pasta (penne)',           qty: '500g',      price: 2.50 },
   { name: 'Tinned tomatoes',         qty: '3 × 400g',  price: 4.50 },
-  { name: 'Frozen peas',             qty: '1kg',       price: 3.50 },
-  { name: 'Cheddar cheese',          qty: '500g',      price: 7.00 },
-  { name: 'Bananas',                 qty: '1.5kg',     price: 4.00 },
-  { name: 'Apples',                  qty: '6 pack',    price: 5.50 },
-  { name: 'Oats',                    qty: '1kg',       price: 3.50 },
-  { name: 'Olive oil',               qty: '500ml',     price: 7.00 },
-  { name: 'Garlic',                  qty: '1 bulb',    price: 0.90 },
+  { name: 'Frozen peas',             qty: '1kg',       price: 3.80 },
+  { name: 'Cheddar cheese',          qty: '500g',      price: 8.00 },
+  { name: 'Bananas',                 qty: '1.5kg',     price: 4.50 },
+  { name: 'Apples',                  qty: '6 pack',    price: 6.00 },
+  { name: 'Rolled oats',             qty: '1kg',       price: 4.00 },
+  { name: 'Olive oil',               qty: '500mL',     price: 8.00 },
+  { name: 'Garlic',                  qty: '1 bulb',    price: 1.20 },
 ]
 
 function dietRestriction(diet: Diet): string {
@@ -73,7 +73,7 @@ export default function ShoppingClient() {
     setChecked(new Set())
 
     try {
-      const prompt = `Generate a weekly grocery list for a budget of $${budget}.${dietRestriction(diet)} Return ONLY a JSON array with no explanation or markdown, where each item has "name" (string), "qty" (string), and "price" (number). Include 12–15 items covering a balanced mix of proteins, vegetables, dairy or alternatives, and pantry staples. The total must not exceed $${budget}.`
+      const prompt = `Generate a weekly grocery list for a budget of $${budget} AUD.${dietRestriction(diet)} Return ONLY a JSON array with no explanation or markdown, where each item has "name" (string), "qty" (string), and "price" (number). Include 12–15 items covering a balanced mix of proteins, vegetables, dairy or alternatives, and pantry staples. The total must not exceed $${budget} AUD. Use Australian supermarket prices (Coles/Woolworths). Use metric units only (g, kg, mL, L) — no imperial units.`
 
       const res = await fetch('/api/ai', {
         method: 'POST',
