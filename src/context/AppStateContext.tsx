@@ -179,51 +179,56 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     setIsGuest(false)
     const supabase = createClient()
 
-    const [
-      { data: profileData },
-      { data: cycleData },
-      { data: fixedData },
-      { data: txnsData },
-      { data: savingsData },
-      { data: catsData },
-      { data: goalsData },
-      vault,
-    ] = await Promise.all([
-      supabase.from('profiles').select('*').single(),
-      supabase.from('cycle_state').select('*').single(),
-      supabase.from('fixed_expenses').select('*').order('sort_order'),
-      supabase.from('transactions').select('*').order('date', { ascending: false }).order('created_at', { ascending: false }),
-      supabase.from('monthly_savings').select('*').eq('year', new Date().getFullYear()).single(),
-      supabase.from('custom_categories').select('*').order('sort_order'),
-      supabase.from('savings_goals').select('*').order('sort_order'),
-      readVault(),
-    ])
+    try {
+      const [
+        { data: profileData },
+        { data: cycleData },
+        { data: fixedData },
+        { data: txnsData },
+        { data: savingsData },
+        { data: catsData },
+        { data: goalsData },
+        vault,
+      ] = await Promise.all([
+        supabase.from('profiles').select('*').single(),
+        supabase.from('cycle_state').select('*').single(),
+        supabase.from('fixed_expenses').select('*').order('sort_order'),
+        supabase.from('transactions').select('*').order('date', { ascending: false }).order('created_at', { ascending: false }),
+        supabase.from('monthly_savings').select('*').eq('year', new Date().getFullYear()).single(),
+        supabase.from('custom_categories').select('*').order('sort_order'),
+        supabase.from('savings_goals').select('*').order('sort_order'),
+        readVault(),
+      ])
 
-    // Overlay vault (encrypted) values onto Supabase data
-    setProfile(profileData ? {
-      ...profileData,
-      income:         vault.income,
-      total_savings:  vault.total_savings,
-      monthly_target: vault.monthly_target,
-    } : null)
+      // Overlay vault (encrypted) values onto Supabase data
+      setProfile(profileData ? {
+        ...profileData,
+        income:         vault.income,
+        total_savings:  vault.total_savings,
+        monthly_target: vault.monthly_target,
+      } : null)
 
-    setCycleState(cycleData ? {
-      ...cycleData,
-      wallet:           vault.wallet,
-      cycle_income:     vault.cycle_income,
-      last_cycle_saved: vault.last_cycle_saved,
-    } : null)
+      setCycleState(cycleData ? {
+        ...cycleData,
+        wallet:           vault.wallet,
+        cycle_income:     vault.cycle_income,
+        last_cycle_saved: vault.last_cycle_saved,
+      } : null)
 
-    setMonthlySavings(savingsData ? {
-      ...savingsData,
-      months: vault.months,
-    } : savingsData ?? null)
+      setMonthlySavings(savingsData ? {
+        ...savingsData,
+        months: vault.months,
+      } : savingsData ?? null)
 
-    setFixedExpenses(fixedData   ?? [])
-    setTransactions(txnsData     ?? [])
-    setCustomCats(catsData       ?? [])
-    setSavingsGoals(goalsData    ?? [])
-    setLoading(false)
+      setFixedExpenses(fixedData   ?? [])
+      setTransactions(txnsData     ?? [])
+      setCustomCats(catsData       ?? [])
+      setSavingsGoals(goalsData    ?? [])
+    } catch (err) {
+      console.error('fetchAll error:', err)
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => {

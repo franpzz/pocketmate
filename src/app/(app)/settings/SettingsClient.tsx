@@ -294,91 +294,95 @@ export default function SettingsClient() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setSaving(false); return }
 
-    // Sensitive fields → vault
-    await writeVault({
-      income,
-      total_savings: totalSavings,
-      monthly_target: monthlyTarget,
-      wallet,
-    })
+    try {
+      // Sensitive fields → vault
+      await writeVault({
+        income,
+        total_savings: totalSavings,
+        monthly_target: monthlyTarget,
+        wallet,
+      })
 
-    // Non-sensitive profile fields → Supabase
-    await supabase.from('profiles').update({
-      name:           name || 'User',
-      cadence,
-      extra,
-      groceries,
-      dining,
-      transport,
-      entertainment,
-      goal_name:      goalName || 'Savings goal',
-      updated_at:     new Date().toISOString(),
-    }).eq('user_id', user.id)
+      // Non-sensitive profile fields → Supabase
+      await supabase.from('profiles').update({
+        name:           name || 'User',
+        cadence,
+        extra,
+        groceries,
+        dining,
+        transport,
+        entertainment,
+        goal_name:      goalName || 'Savings goal',
+        updated_at:     new Date().toISOString(),
+      }).eq('user_id', user.id)
 
-    // Diff fixed expenses
-    const keptIds    = new Set(validFixed.filter(e => e.id).map(e => e.id!))
-    const deletedIds = fixedExpenses.map(e => e.id).filter(id => !keptIds.has(id))
+      // Diff fixed expenses
+      const keptIds    = new Set(validFixed.filter(e => e.id).map(e => e.id!))
+      const deletedIds = fixedExpenses.map(e => e.id).filter(id => !keptIds.has(id))
 
-    if (deletedIds.length > 0) {
-      await supabase.from('fixed_expenses').delete().in('id', deletedIds)
+      if (deletedIds.length > 0) {
+        await supabase.from('fixed_expenses').delete().in('id', deletedIds)
+      }
+
+      if (validFixed.length > 0) {
+        await supabase.from('fixed_expenses').upsert(
+          validFixed.map((e, i) => ({
+            ...(e.id ? { id: e.id } : {}),
+            user_id:         user.id,
+            name:            e.name.trim(),
+            amount:          e.amount,
+            cat:             e.cat,
+            split:           Math.max(1, e.split || 1),
+            paid_this_cycle: e.paid_this_cycle,
+            due_day:         e.due_day ?? null,
+            sort_order:      i,
+          }))
+        )
+      }
+
+      // Replace custom categories
+      await supabase.from('custom_categories').delete().eq('user_id', user.id)
+      if (catList.length > 0) {
+        await supabase.from('custom_categories').insert(
+          catList.map((c, i) => ({
+            user_id:    user.id,
+            name:       c.name,
+            icon:       c.icon || '🏷',
+            sort_order: i,
+          }))
+        )
+      }
+
+      // Upsert savings goals
+      const keptGoalIds    = new Set(goals.filter(g => g.id).map(g => g.id!))
+      const deletedGoalIds = savingsGoals.map(g => g.id).filter(id => !keptGoalIds.has(id))
+
+      if (deletedGoalIds.length > 0) {
+        await supabase.from('savings_goals').delete().in('id', deletedGoalIds)
+      }
+
+      if (goals.length > 0) {
+        await supabase.from('savings_goals').upsert(
+          goals.map((g, i) => ({
+            ...(g.id ? { id: g.id } : {}),
+            user_id:       user.id,
+            name:          g.name,
+            target_amount: g.target_amount,
+            saved_amount:  g.saved_amount,
+            icon:          g.icon || '🎯',
+            sort_order:    i,
+          }))
+        )
+      }
+
+      await refetch()
+      setSaveState('done')
+      setTimeout(() => setSaveState('idle'), 3000)
+    } catch (err) {
+      console.error('save error:', err)
+    } finally {
+      setSaving(false)
     }
-
-    if (validFixed.length > 0) {
-      await supabase.from('fixed_expenses').upsert(
-        validFixed.map((e, i) => ({
-          ...(e.id ? { id: e.id } : {}),
-          user_id:         user.id,
-          name:            e.name.trim(),
-          amount:          e.amount,
-          cat:             e.cat,
-          split:           Math.max(1, e.split || 1),
-          paid_this_cycle: e.paid_this_cycle,
-          due_day:         e.due_day ?? null,
-          sort_order:      i,
-          // last_paid_date not included — Supabase preserves existing value on upsert
-        }))
-      )
-    }
-
-    // Replace custom categories
-    await supabase.from('custom_categories').delete().eq('user_id', user.id)
-    if (catList.length > 0) {
-      await supabase.from('custom_categories').insert(
-        catList.map((c, i) => ({
-          user_id:    user.id,
-          name:       c.name,
-          icon:       c.icon || '🏷',
-          sort_order: i,
-        }))
-      )
-    }
-
-    // Upsert savings goals
-    const keptGoalIds   = new Set(goals.filter(g => g.id).map(g => g.id!))
-    const deletedGoalIds = savingsGoals.map(g => g.id).filter(id => !keptGoalIds.has(id))
-
-    if (deletedGoalIds.length > 0) {
-      await supabase.from('savings_goals').delete().in('id', deletedGoalIds)
-    }
-
-    if (goals.length > 0) {
-      await supabase.from('savings_goals').upsert(
-        goals.map((g, i) => ({
-          ...(g.id ? { id: g.id } : {}),
-          user_id:       user.id,
-          name:          g.name,
-          target_amount: g.target_amount,
-          saved_amount:  g.saved_amount,
-          icon:          g.icon || '🎯',
-          sort_order:    i,
-        }))
-      )
-    }
-
-    await refetch()
-    setSaving(false)
-    setSaveState('done')
-    setTimeout(() => setSaveState('idle'), 3000)
   }
 
   // ── Sign out ──────────────────────────────────────────────────────────────────
