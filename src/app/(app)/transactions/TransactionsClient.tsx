@@ -52,6 +52,25 @@ export default function TransactionsClient() {
     return y === year ? name : `${name} ${y}`
   }
 
+  function downloadCSV() {
+    const header = ['Date', 'Name', 'Category', 'Type', 'Amount']
+    const rows = transactions.map(t => [
+      t.date,
+      `"${t.name.replace(/"/g, '""')}"`,
+      `"${t.cat.replace(/"/g, '""')}"`,
+      t.is_positive ? 'Income' : 'Expense',
+      t.amount.toFixed(2),
+    ])
+    const csv = [header.join(','), ...rows.map(r => r.join(','))].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `pocketmate-${new Date().toISOString().split('T')[0]}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   // Whether a transaction is from the current pay cycle
   function isCurrentCycle(t: Transaction): boolean {
     if (!cycleState?.has_first_pay || !cycleState.last_paid_date) return false
@@ -114,16 +133,23 @@ export default function TransactionsClient() {
           <h1 className={s.pageTitle}>Transactions</h1>
           <p className={s.pageSub}>{MONTH_NAMES_LONG[cm]} {year}</p>
         </div>
-        <div className={s.filterRow}>
-          {(['all', 'expenses', 'income'] as const).map(f => (
-            <button
-              key={f}
-              className={`${s.filterBtn} ${filter === f ? s.active : ''}`}
-              onClick={() => setFilter(f)}
-            >
-              {f.charAt(0).toUpperCase() + f.slice(1)}
+        <div className={s.headerRight}>
+          <div className={s.filterRow}>
+            {(['all', 'expenses', 'income'] as const).map(f => (
+              <button
+                key={f}
+                className={`${s.filterBtn} ${filter === f ? s.active : ''}`}
+                onClick={() => setFilter(f)}
+              >
+                {f.charAt(0).toUpperCase() + f.slice(1)}
+              </button>
+            ))}
+          </div>
+          {transactions.length > 0 && (
+            <button className={s.exportBtn} onClick={downloadCSV} title="Export to CSV">
+              ↓ Export
             </button>
-          ))}
+          )}
         </div>
       </div>
 

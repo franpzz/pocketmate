@@ -15,7 +15,24 @@
 
 .pageSub { color: var(--text2); font-size: 13px; }
 
+.headerRight { display: flex; align-items: center; gap: 8px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
+
 .filterRow { display: flex; gap: 6px; flex-shrink: 0; }
+
+.exportBtn {
+  padding: 7px 14px;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 20px;
+  color: var(--text2);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.exportBtn:hover { border-color: var(--accent); color: var(--accent); }
 
 .filterBtn {
   padding: 7px 14px;

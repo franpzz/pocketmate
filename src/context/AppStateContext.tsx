@@ -10,6 +10,7 @@ import type {
   Transaction,
   MonthlySavings,
   CustomCategory,
+  SavingsGoal,
   Cadence,
 } from '@/lib/types'
 
@@ -37,6 +38,7 @@ export interface GuestData {
   fixed: FixedExpense[]
   transactions: Transaction[]
   customCats: CustomCategory[]
+  goals: SavingsGoal[]
 }
 
 const DEFAULT_GUEST: GuestData = {
@@ -61,6 +63,7 @@ const DEFAULT_GUEST: GuestData = {
   fixed: [],
   transactions: [],
   customCats: [],
+  goals: [],
 }
 
 function loadGuest(): GuestData {
@@ -132,6 +135,7 @@ interface AppState {
   transactions: Transaction[]
   monthlySavings: MonthlySavings | null
   customCats: CustomCategory[]
+  savingsGoals: SavingsGoal[]
   loading: boolean
   isGuest: boolean
   refetch: () => Promise<void>
@@ -149,6 +153,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   const [transactions,   setTransactions]   = useState<Transaction[]>([])
   const [monthlySavings, setMonthlySavings] = useState<MonthlySavings | null>(null)
   const [customCats,     setCustomCats]     = useState<CustomCategory[]>([])
+  const [savingsGoals,   setSavingsGoals]   = useState<SavingsGoal[]>([])
   const [loading,        setLoading]        = useState(true)
   const [isGuest,        setIsGuest]        = useState(false)
 
@@ -165,6 +170,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       setTransactions(g.transactions)
       setMonthlySavings(guestToMonthlySavings(g))
       setCustomCats(g.customCats)
+      setSavingsGoals(g.goals)
       setLoading(false)
       return
     }
@@ -180,6 +186,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       { data: txnsData },
       { data: savingsData },
       { data: catsData },
+      { data: goalsData },
       vault,
     ] = await Promise.all([
       supabase.from('profiles').select('*').single(),
@@ -188,6 +195,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       supabase.from('transactions').select('*').order('date', { ascending: false }).order('created_at', { ascending: false }),
       supabase.from('monthly_savings').select('*').eq('year', new Date().getFullYear()).single(),
       supabase.from('custom_categories').select('*').order('sort_order'),
+      supabase.from('savings_goals').select('*').order('sort_order'),
       readVault(),
     ])
 
@@ -211,9 +219,10 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       months: vault.months,
     } : savingsData ?? null)
 
-    setFixedExpenses(fixedData  ?? [])
-    setTransactions(txnsData    ?? [])
-    setCustomCats(catsData      ?? [])
+    setFixedExpenses(fixedData   ?? [])
+    setTransactions(txnsData     ?? [])
+    setCustomCats(catsData       ?? [])
+    setSavingsGoals(goalsData    ?? [])
     setLoading(false)
   }, [])
 
@@ -233,6 +242,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     setTransactions(next.transactions)
     setMonthlySavings(guestToMonthlySavings(next))
     setCustomCats(next.customCats)
+    setSavingsGoals(next.goals)
   }, [])
 
   return (
@@ -243,6 +253,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       transactions,
       monthlySavings,
       customCats,
+      savingsGoals,
       loading,
       isGuest,
       refetch: fetchAll,

@@ -7,7 +7,7 @@ import { useAppState } from '@/context/AppStateContext'
 import { writeVault } from '@/lib/vault'
 import { CAT_NAMES, getCatDef, getAllCatNames } from '@/lib/categories'
 import { fixedTotal } from '@/lib/finance'
-import type { Cadence } from '@/lib/types'
+import type { Cadence, SavingsGoal } from '@/lib/types'
 import s from './settings.module.css'
 
 const EMOJI_OPTIONS = [
@@ -60,9 +60,17 @@ interface CatRow {
   icon: string
 }
 
+interface GoalRow {
+  id?: string
+  name: string
+  target_amount: number
+  saved_amount: number
+  icon: string
+}
+
 export default function SettingsClient() {
   const router = useRouter()
-  const { profile, cycleState, fixedExpenses, customCats, loading, isGuest, refetch, guestUpdate } = useAppState()
+  const { profile, cycleState, fixedExpenses, customCats, savingsGoals, loading, isGuest, refetch, guestUpdate } = useAppState()
 
   // Profile fields
   const [name,          setName]          = useState('')
@@ -86,6 +94,14 @@ export default function SettingsClient() {
   const [newCatIcon,    setNewCatIcon]    = useState('🏷')
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false)
   const emojiPickerRef = useRef<HTMLDivElement>(null)
+
+  // Savings goals
+  const [goals,        setGoals]        = useState<GoalRow[]>([])
+  const [newGoalName,  setNewGoalName]  = useState('')
+  const [newGoalIcon,  setNewGoalIcon]  = useState('🎯')
+  const [newGoalTarget, setNewGoalTarget] = useState(0)
+  const [goalEmojiOpen, setGoalEmojiOpen] = useState(false)
+  const goalEmojiRef = useRef<HTMLDivElement>(null)
 
   // Wallet adjustment
   const [wallet, setWallet] = useState(0)
@@ -132,6 +148,16 @@ export default function SettingsClient() {
     setCatList(customCats.map(c => ({ id: c.id, name: c.name, icon: c.icon })))
   }, [customCats])
 
+  useEffect(() => {
+    setGoals(savingsGoals.map(g => ({
+      id: g.id,
+      name: g.name,
+      target_amount: g.target_amount,
+      saved_amount: g.saved_amount,
+      icon: g.icon,
+    })))
+  }, [savingsGoals])
+
   if (loading || !profile) return null
 
   // ── Fixed expense helpers ─────────────────────────────────────────────────────
@@ -159,6 +185,17 @@ export default function SettingsClient() {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [emojiPickerOpen])
 
+  useEffect(() => {
+    if (!goalEmojiOpen) return
+    function handleClick(e: MouseEvent) {
+      if (goalEmojiRef.current && !goalEmojiRef.current.contains(e.target as Node)) {
+        setGoalEmojiOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [goalEmojiOpen])
+
   // ── Custom cat helpers ────────────────────────────────────────────────────────
   function addCat() {
     const n = newCatName.trim()
@@ -173,6 +210,25 @@ export default function SettingsClient() {
 
   function removeCat(i: number) {
     setCatList(prev => prev.filter((_, idx) => idx !== i))
+  }
+
+  // ── Goal helpers ──────────────────────────────────────────────────────────────
+  function addGoal() {
+    const n = newGoalName.trim()
+    if (!n) return
+    setGoals(prev => [...prev, { name: n, icon: newGoalIcon || '🎯', target_amount: newGoalTarget, saved_amount: 0 }])
+    setNewGoalName('')
+    setNewGoalIcon('🎯')
+    setNewGoalTarget(0)
+    setGoalEmojiOpen(false)
+  }
+
+  function removeGoal(i: number) {
+    setGoals(prev => prev.filter((_, idx) => idx !== i))
+  }
+
+  function updateGoal(i: number, field: keyof GoalRow, value: string | number) {
+    setGoals(prev => prev.map((g, idx) => idx === i ? { ...g, [field]: value } : g))
   }
 
   // ── Save ──────────────────────────────────────────────────────────────────────
@@ -216,6 +272,16 @@ export default function SettingsClient() {
           sort_order: i,
           created_at: '',
         })),
+        goals: goals.map((g, i) => ({
+          id: g.id || crypto.randomUUID(),
+          user_id: 'guest',
+          name: g.name,
+          target_amount: g.target_amount,
+          saved_amount: g.saved_amount,
+          icon: g.icon || '🎯',
+          sort_order: i,
+          created_at: '',
+        } as SavingsGoal)),
       })
       setSaving(false)
       setSaveState('done')
@@ -283,6 +349,28 @@ export default function SettingsClient() {
           name:       c.name,
           icon:       c.icon || '🏷',
           sort_order: i,
+        }))
+      )
+    }
+
+    // Upsert savings goals
+    const keptGoalIds   = new Set(goals.filter(g => g.id).map(g => g.id!))
+    const deletedGoalIds = savingsGoals.map(g => g.id).filter(id => !keptGoalIds.has(id))
+
+    if (deletedGoalIds.length > 0) {
+      await supabase.from('savings_goals').delete().in('id', deletedGoalIds)
+    }
+
+    if (goals.length > 0) {
+      await supabase.from('savings_goals').upsert(
+        goals.map((g, i) => ({
+          ...(g.id ? { id: g.id } : {}),
+          user_id:       user.id,
+          name:          g.name,
+          target_amount: g.target_amount,
+          saved_amount:  g.saved_amount,
+          icon:          g.icon || '🎯',
+          sort_order:    i,
         }))
       )
     }
@@ -548,6 +636,99 @@ export default function SettingsClient() {
             onKeyDown={e => e.key === 'Enter' && addCat()}
           />
           <button className={s.addCatBtn} type="button" onClick={addCat}>+ Add</button>
+        </div>
+      </div>
+
+      {/* ── Savings goals tracker ── */}
+      <div className={s.section}>
+        <div className={s.sectionTitle}>
+          Goal tracker
+          <span className={s.sectionBadge}>{goals.length} goal{goals.length !== 1 ? 's' : ''}</span>
+        </div>
+        <div className={s.card}>
+          {goals.length === 0 && (
+            <div className={s.emptyRow}>No goals yet. Add one below to start tracking.</div>
+          )}
+          {goals.map((g, i) => (
+            <div key={i} className={s.goalSettingsRow}>
+              <div className={s.emojiPickerWrap} style={{ flexShrink: 0 }}>
+                <div className={s.goalIconDisp}>{g.icon}</div>
+              </div>
+              <input
+                className={s.feNameInput}
+                type="text"
+                value={g.name}
+                placeholder="Goal name"
+                onChange={e => updateGoal(i, 'name', e.target.value)}
+              />
+              <div className={s.feAmtWrap} title="Saved so far">
+                <span>$</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={g.saved_amount || ''}
+                  placeholder="Saved"
+                  onChange={e => updateGoal(i, 'saved_amount', +e.target.value || 0)}
+                />
+              </div>
+              <div className={s.feAmtWrap} title="Target amount">
+                <span>🎯</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={g.target_amount || ''}
+                  placeholder="Target"
+                  onChange={e => updateGoal(i, 'target_amount', +e.target.value || 0)}
+                />
+              </div>
+              <button className={s.delBtn} type="button" onClick={() => removeGoal(i)}>✕</button>
+            </div>
+          ))}
+        </div>
+        <div className={s.addCatRow}>
+          <div className={s.emojiPickerWrap} ref={goalEmojiRef}>
+            <button
+              type="button"
+              className={s.catIconBtn}
+              onClick={() => setGoalEmojiOpen(v => !v)}
+              title="Pick an icon"
+            >
+              {newGoalIcon}
+            </button>
+            {goalEmojiOpen && (
+              <div className={s.emojiPicker}>
+                {EMOJI_OPTIONS.map(e => (
+                  <button
+                    key={e}
+                    type="button"
+                    className={`${s.emojiOption} ${newGoalIcon === e ? s.emojiSelected : ''}`}
+                    onClick={() => { setNewGoalIcon(e); setGoalEmojiOpen(false) }}
+                  >
+                    {e}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <input
+            className={s.catNameInput}
+            type="text"
+            placeholder="Goal name (e.g. Europe trip, Emergency fund)"
+            value={newGoalName}
+            onChange={e => setNewGoalName(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && addGoal()}
+          />
+          <div className={s.feAmtWrap} style={{ flexShrink: 0 }} title="Target amount">
+            <span>$</span>
+            <input
+              type="number"
+              min="0"
+              value={newGoalTarget || ''}
+              placeholder="Target"
+              onChange={e => setNewGoalTarget(+e.target.value || 0)}
+            />
+          </div>
+          <button className={s.addCatBtn} type="button" onClick={addGoal}>+ Add</button>
         </div>
       </div>
 

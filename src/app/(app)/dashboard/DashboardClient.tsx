@@ -13,7 +13,7 @@ import {
 import {
   CAT_DEFS, getCatDef, getCatIcon, getCatBg,
 } from '@/lib/categories'
-import type { FixedExpense, Transaction } from '@/lib/types'
+import type { FixedExpense, Transaction, SavingsGoal } from '@/lib/types'
 
 // ── Bill status ────────────────────────────────────────────────────────────────
 type BillStatus = 'paid' | 'due' | 'upcoming'
@@ -55,7 +55,7 @@ function greeting() {
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function DashboardClient() {
-  const { profile, cycleState, fixedExpenses, transactions, monthlySavings, customCats, loading, isGuest, refetch, guestUpdate } = useAppState()
+  const { profile, cycleState, fixedExpenses, transactions, monthlySavings, customCats, savingsGoals, loading, isGuest, refetch, guestUpdate } = useAppState()
   const { theme, toggle } = useTheme()
   const [paidLoading, setPaidLoading] = useState(false)
   const [paidBtn, setPaidBtn] = useState<'idle' | 'done'>('idle')
@@ -63,6 +63,9 @@ export default function DashboardClient() {
   const [showPayConfirm, setShowPayConfirm] = useState(false)
   const [confirmTxnId, setConfirmTxnId] = useState<string | null>(null)
   const [deletingTxnId, setDeletingTxnId] = useState<string | null>(null)
+  const [addGoalId, setAddGoalId] = useState<string | null>(null)
+  const [addGoalAmt, setAddGoalAmt] = useState('')
+  const [savingGoalId, setSavingGoalId] = useState<string | null>(null)
 
   if (loading) return <div className={s.loading}>Loading…</div>
   if (!profile || !cycleState) return <div className={s.loading}>No data found.</div>
@@ -301,6 +304,34 @@ export default function DashboardClient() {
     setConfirmTxnId(null)
     setDeletingTxnId(null)
     await refetch()
+  }
+
+  // ── Add money to savings goal ─────────────────────────────────────────────────
+  async function addToGoal(goal: SavingsGoal) {
+    const amt = parseFloat(addGoalAmt)
+    if (!amt || amt <= 0 || savingGoalId) return
+    setSavingGoalId(goal.id)
+
+    const newSaved = goal.saved_amount + amt
+
+    if (isGuest) {
+      const current = JSON.parse(localStorage.getItem('pm_guest_data') || '{}')
+      const updatedGoals: SavingsGoal[] = (current.goals ?? []).map((g: SavingsGoal) =>
+        g.id === goal.id ? { ...g, saved_amount: newSaved } : g
+      )
+      guestUpdate({ goals: updatedGoals })
+      setAddGoalId(null)
+      setAddGoalAmt('')
+      setSavingGoalId(null)
+      return
+    }
+
+    const supabase = createClient()
+    await supabase.from('savings_goals').update({ saved_amount: newSaved }).eq('id', goal.id)
+    await refetch()
+    setAddGoalId(null)
+    setAddGoalAmt('')
+    setSavingGoalId(null)
   }
 
   // ── Balance bar segments ──────────────────────────────────────────────────────
@@ -659,6 +690,83 @@ export default function DashboardClient() {
           })}
         </div>
       </div>
+
+      {/* Savings goals */}
+      {savingsGoals.length > 0 && (
+        <div className={s.card} style={{ marginBottom: 24 }}>
+          <div className={s.cardTitle}>Savings goals</div>
+          <div className={s.goalList}>
+            {savingsGoals.map(goal => {
+              const pct = goal.target_amount > 0
+                ? Math.min(100, Math.round(goal.saved_amount / goal.target_amount * 100))
+                : 0
+              const done = goal.saved_amount >= goal.target_amount && goal.target_amount > 0
+              const isAdding = addGoalId === goal.id
+              return (
+                <div key={goal.id} className={s.goalItem}>
+                  <div className={s.goalRow}>
+                    <span className={s.goalIcon}>{goal.icon}</span>
+                    <div className={s.goalInfo}>
+                      <div className={s.goalName}>{goal.name}</div>
+                      <div className={s.goalAmts}>
+                        <span className={s.goalSaved}>{fmt(goal.saved_amount)}</span>
+                        {goal.target_amount > 0 && (
+                          <span className={s.goalOf}>of {fmt(goal.target_amount)}</span>
+                        )}
+                      </div>
+                    </div>
+                    {done ? (
+                      <span className={s.goalDone}>✓ Done</span>
+                    ) : (
+                      <button
+                        className={s.goalAddBtn}
+                        onClick={() => { setAddGoalId(goal.id); setAddGoalAmt('') }}
+                        disabled={isAdding}
+                      >
+                        + Add
+                      </button>
+                    )}
+                  </div>
+                  {goal.target_amount > 0 && (
+                    <div className={s.goalTrack}>
+                      <div
+                        className={s.goalFill}
+                        style={{
+                          width: `${pct}%`,
+                          background: done ? 'var(--accent)' : pct >= 70 ? 'var(--amber)' : 'var(--blue)',
+                        }}
+                      />
+                    </div>
+                  )}
+                  {isAdding && (
+                    <div className={s.goalAddRow}>
+                      <input
+                        className={s.goalAmtInput}
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        placeholder="Amount"
+                        value={addGoalAmt}
+                        autoFocus
+                        onChange={e => setAddGoalAmt(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') addToGoal(goal); if (e.key === 'Escape') setAddGoalId(null) }}
+                      />
+                      <button
+                        className={s.goalConfirm}
+                        onClick={() => addToGoal(goal)}
+                        disabled={savingGoalId === goal.id}
+                      >
+                        {savingGoalId === goal.id ? '…' : 'Save'}
+                      </button>
+                      <button className={s.goalCancel} onClick={() => setAddGoalId(null)}>Cancel</button>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Budget bars */}
       <div className={s.budgetBarsSection}>
