@@ -6,6 +6,15 @@ import s from './shopping.module.css'
 
 interface ShopItem { name: string; qty: string; price: number }
 
+type Diet = 'none' | 'vegetarian' | 'vegan'
+type ListState = 'empty' | 'generating' | 'ready'
+
+const DIET_OPTIONS: { value: Diet; label: string }[] = [
+  { value: 'none',        label: 'No restrictions' },
+  { value: 'vegetarian',  label: 'Vegetarian' },
+  { value: 'vegan',       label: 'Vegan' },
+]
+
 const FALLBACK_ITEMS: ShopItem[] = [
   { name: 'Free range eggs (12pk)',  qty: '1 × 12pk', price: 5.50 },
   { name: 'Full cream milk',         qty: '2L',        price: 3.20 },
@@ -24,10 +33,14 @@ const FALLBACK_ITEMS: ShopItem[] = [
   { name: 'Garlic',                  qty: '1 bulb',    price: 0.90 },
 ]
 
+function dietRestriction(diet: Diet): string {
+  if (diet === 'vegetarian') return ' The list must be fully vegetarian — no meat, poultry, or fish. Dairy and eggs are allowed.'
+  if (diet === 'vegan')      return ' The list must be fully vegan — absolutely no animal products (no meat, fish, poultry, dairy, eggs, or honey). Use plant-based alternatives where relevant.'
+  return ''
+}
+
 function parseItems(text: string): ShopItem[] | null {
-  // Strip markdown code fences if present
   const cleaned = text.replace(/```(?:json)?\n?/g, '').trim()
-  // Find the JSON array
   const match = cleaned.match(/\[[\s\S]*\]/)
   if (!match) return null
   try {
@@ -44,24 +57,23 @@ function parseItems(text: string): ShopItem[] | null {
   }
 }
 
-type ListState = 'empty' | 'generating' | 'ready'
-
 export default function ShoppingClient() {
   const { profile, loading } = useAppState()
   const [listState, setListState] = useState<ListState>('empty')
-  const [items, setItems] = useState<ShopItem[]>([])
-  const [checked, setChecked] = useState<Set<number>>(new Set())
+  const [diet, setDiet]           = useState<Diet>('none')
+  const [items, setItems]         = useState<ShopItem[]>([])
+  const [checked, setChecked]     = useState<Set<number>>(new Set())
 
   if (loading) return null
   const budget = profile?.groceries ?? 120
-  const total = items.reduce((a, i) => a + i.price, 0)
+  const total  = items.reduce((a, i) => a + i.price, 0)
 
   async function generate() {
     setListState('generating')
     setChecked(new Set())
 
     try {
-      const prompt = `Generate a weekly grocery list for a budget of $${budget}. Return ONLY a JSON array with no explanation or markdown, where each item has "name" (string), "qty" (string), and "price" (number). Include 12–15 items covering proteins, vegetables, dairy, and pantry staples. The total must not exceed $${budget}.`
+      const prompt = `Generate a weekly grocery list for a budget of $${budget}.${dietRestriction(diet)} Return ONLY a JSON array with no explanation or markdown, where each item has "name" (string), "qty" (string), and "price" (number). Include 12–15 items covering a balanced mix of proteins, vegetables, dairy or alternatives, and pantry staples. The total must not exceed $${budget}.`
 
       const res = await fetch('/api/ai', {
         method: 'POST',
@@ -102,6 +114,18 @@ export default function ShoppingClient() {
         <button className={s.genBtn} onClick={generate} disabled={listState === 'generating'}>
           {listState === 'generating' ? '✦ Building…' : '✦ Generate list'}
         </button>
+      </div>
+
+      <div className={s.dietRow}>
+        {DIET_OPTIONS.map(opt => (
+          <button
+            key={opt.value}
+            className={`${s.dietBtn} ${diet === opt.value ? s.sel : ''}`}
+            onClick={() => setDiet(opt.value)}
+          >
+            {opt.label}
+          </button>
+        ))}
       </div>
 
       {listState === 'empty' && (

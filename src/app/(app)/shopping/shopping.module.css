@@ -39,6 +39,27 @@
 .genBtn:hover    { background: var(--accent-mid); }
 .genBtn:disabled { opacity: 0.6; cursor: not-allowed; }
 
+.dietRow {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.dietBtn {
+  padding: 8px 16px;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-sm);
+  color: var(--text2);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.dietBtn:hover    { border-color: var(--accent); color: var(--accent); }
+.dietBtn.sel      { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+
 .emptyState {
   text-align: center;
   padding: 48px 20px;
