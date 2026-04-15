@@ -158,7 +158,8 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   const [isGuest,        setIsGuest]        = useState(false)
 
   const fetchAll = useCallback(async () => {
-    setLoading(true)
+    // Note: loading starts as true (useState), we only ever set it to false.
+    // Subsequent refetch() calls from save() run silently without blanking the UI.
 
     // ── Guest mode ────────────────────────────────────────────────────────────
     if (isGuestCookie()) {
