@@ -4,7 +4,9 @@ import { useState } from 'react'
 import { useAppState } from '@/context/AppStateContext'
 import s from './shopping.module.css'
 
-const SHOP_ITEMS = [
+interface ShopItem { name: string; qty: string; price: number }
+
+const FALLBACK_ITEMS: ShopItem[] = [
   { name: 'Free range eggs (12pk)',  qty: '1 × 12pk', price: 5.50 },
   { name: 'Full cream milk',         qty: '2L',        price: 3.20 },
   { name: 'Chicken breast',          qty: '1kg',       price: 12.00 },
@@ -22,21 +24,59 @@ const SHOP_ITEMS = [
   { name: 'Garlic',                  qty: '1 bulb',    price: 0.90 },
 ]
 
+function parseItems(text: string): ShopItem[] | null {
+  // Strip markdown code fences if present
+  const cleaned = text.replace(/```(?:json)?\n?/g, '').trim()
+  // Find the JSON array
+  const match = cleaned.match(/\[[\s\S]*\]/)
+  if (!match) return null
+  try {
+    const parsed = JSON.parse(match[0])
+    if (!Array.isArray(parsed)) return null
+    return parsed.filter(
+      (i): i is ShopItem =>
+        typeof i.name === 'string' &&
+        typeof i.qty === 'string' &&
+        typeof i.price === 'number',
+    )
+  } catch {
+    return null
+  }
+}
+
 type ListState = 'empty' | 'generating' | 'ready'
 
 export default function ShoppingClient() {
   const { profile, loading } = useAppState()
   const [listState, setListState] = useState<ListState>('empty')
+  const [items, setItems] = useState<ShopItem[]>([])
   const [checked, setChecked] = useState<Set<number>>(new Set())
 
   if (loading) return null
   const budget = profile?.groceries ?? 120
-  const total = SHOP_ITEMS.reduce((a, i) => a + i.price, 0)
+  const total = items.reduce((a, i) => a + i.price, 0)
 
-  function generate() {
+  async function generate() {
     setListState('generating')
     setChecked(new Set())
-    setTimeout(() => setListState('ready'), 1200)
+
+    try {
+      const prompt = `Generate a weekly grocery list for a budget of $${budget}. Return ONLY a JSON array with no explanation or markdown, where each item has "name" (string), "qty" (string), and "price" (number). Include 12–15 items covering proteins, vegetables, dairy, and pantry staples. The total must not exceed $${budget}.`
+
+      const res = await fetch('/api/ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: [{ role: 'user', text: prompt }] }),
+      })
+
+      const data = await res.json()
+      const parsed = res.ok ? parseItems(data.text ?? '') : null
+      setItems(parsed && parsed.length > 0 ? parsed : FALLBACK_ITEMS)
+    } catch {
+      setItems(FALLBACK_ITEMS)
+    }
+
+    setListState('ready')
   }
 
   function toggleCheck(i: number) {
@@ -79,7 +119,7 @@ export default function ShoppingClient() {
 
       {listState === 'ready' && (
         <div className={s.shopList}>
-          {SHOP_ITEMS.map((item, i) => {
+          {items.map((item, i) => {
             const done = checked.has(i)
             return (
               <div key={i} className={`${s.shopItem} ${done ? s.done : ''}`} style={{ animationDelay: `${i * 0.04}s` }}>

@@ -5,7 +5,7 @@ import { useAppState } from '@/context/AppStateContext'
 import { monthlyIncome, totalOut, leftover, ytd, currentMonth, cycleLabel } from '@/lib/finance'
 import s from './ask.module.css'
 
-interface Message { role: 'user' | 'ai'; html: string }
+interface Message { role: 'user' | 'ai'; text: string; html: string }
 
 const QUICK_PROMPTS = [
   'How am I tracking this month?',
@@ -35,58 +35,90 @@ export default function AskClient() {
     const cm = currentMonth()
     const months = monthlySavings?.months ?? new Array(12).fill(0)
     const locked = months[cm] ?? 0
-    let intro: string
+    let introText: string
     if (cycleState.has_first_pay) {
-      intro = `Hey ${profile.name}! Your wallet is **$${Math.abs(cycleState.wallet).toLocaleString()}**${cycleState.wallet < 0 ? ' overdrawn' : ''}. You've locked in **$${locked.toLocaleString()}** in savings this month. What would you like to know?`
+      introText = `Hey ${profile.name}! Your wallet is **$${Math.abs(cycleState.wallet).toLocaleString()}**${cycleState.wallet < 0 ? ' overdrawn' : ''}. You've locked in **$${locked.toLocaleString()}** in savings this month. What would you like to know?`
     } else {
-      intro = `Hey ${profile.name}! Tap **"I got paid"** on the dashboard to start your first cycle. Your pay is $${profile.income.toLocaleString()} per ${cycleLabel(profile.cadence)}. What would you like to know?`
+      introText = `Hey ${profile.name}! Tap **"I got paid"** on the dashboard to start your first cycle. Your pay is $${profile.income.toLocaleString()} per ${cycleLabel(profile.cadence)}. What would you like to know?`
     }
-    setMessages([{ role: 'ai', html: md(intro) }])
+    setMessages([{ role: 'ai', text: introText, html: md(introText) }])
   }, [profile, cycleState, monthlySavings]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  function buildResponse(msg: string): string {
-    if (!profile) return 'Still loading your data…'
-    const lc    = msg.toLowerCase()
-    const cm    = currentMonth()
+  function buildSystemPrompt(): string {
+    if (!profile) return ''
+    const cm = currentMonth()
     const months = monthlySavings?.months ?? new Array(12).fill(0)
     const locked = months[cm] ?? 0
-    const pct   = Math.min(100, Math.round(locked / Math.max(profile.monthly_target, 1) * 100))
-    const left  = Math.max(0, leftover(profile.income, profile.cadence, profile.extra, fixedExpenses, profile.groceries, profile.dining, profile.transport, profile.entertainment))
-    const ytdAmt = ytd(months)
     const incM  = monthlyIncome(profile.income, profile.cadence, profile.extra)
     const outM  = Math.round(totalOut(fixedExpenses, profile.groceries, profile.dining, profile.transport, profile.entertainment))
+    const left  = Math.round(leftover(profile.income, profile.cadence, profile.extra, fixedExpenses, profile.groceries, profile.dining, profile.transport, profile.entertainment))
+    const ytdAmt = ytd(months)
+    const fixedList = fixedExpenses.length
+      ? fixedExpenses.map(f => `  - ${f.name}: $${f.amount}${f.split > 1 ? ` (split ${f.split}x)` : ''}`).join('\n')
+      : '  - None'
 
-    if (lc.includes('track')) {
-      return `You've locked in **$${locked.toLocaleString()}** this month — **${pct}%** of your $${profile.monthly_target.toLocaleString()} target. Your projected cycle leftover is **$${left.toLocaleString()}**. ${locked >= profile.monthly_target ? "Great job, you're above target! 🎉" : 'Keep going!'}`
-    }
-    if (lc.includes('overspend') || lc.includes('too much')) {
-      return `Your biggest variable spend is **Dining out at $${profile.dining.toLocaleString()}/wk**. Cutting one meal out per week could save ~$${profile.dining}. Your groceries at $${profile.groceries.toLocaleString()}/wk look reasonable.`
-    }
-    if (lc.includes('goal') || lc.includes('when')) {
-      const remain = profile.monthly_target * 12 - ytdAmt
-      return `You've saved **$${ytdAmt.toLocaleString()}** this year. ${remain > 0 ? "At your current rate you're tracking well toward your yearly target." : '🎉 Annual target reached!'}`
-    }
-    if (lc.includes('save more') || lc.includes('tips')) {
-      return 'Three quick wins: **1.** Cook one extra dinner at home per week (saves ~$80/mo). **2.** Review subscriptions — Netflix, Spotify, etc. **3.** Use the Shopping List to meal-plan and cut grocery waste (~$20–40/mo).'
-    }
-    return `Based on your numbers: income **$${incM.toLocaleString()}/mo**, outgoings **$${outM.toLocaleString()}/mo**, leaving **$${left.toLocaleString()}** per cycle. Want me to dig into anything specific?`
+    return `You are PocketMate, a friendly and concise personal finance assistant. Answer using the user's real data below.
+
+USER FINANCIAL DATA:
+- Name: ${profile.name}
+- Pay: $${profile.income.toLocaleString()} per ${cycleLabel(profile.cadence)} (monthly equivalent: $${incM.toLocaleString()})
+- Monthly outgoings: $${outM.toLocaleString()}
+- Cycle leftover after expenses: $${left.toLocaleString()} per ${cycleLabel(profile.cadence)}
+- Monthly savings target: $${profile.monthly_target.toLocaleString()}
+- This month locked savings: $${locked.toLocaleString()}
+- Year-to-date savings: $${ytdAmt.toLocaleString()}
+- Current wallet balance: $${(cycleState?.wallet ?? 0).toLocaleString()}
+- Weekly budgets — groceries: $${profile.groceries}, dining: $${profile.dining}, transport: $${profile.transport}, entertainment: $${profile.entertainment}
+- Fixed expenses:\n${fixedList}
+
+RULES:
+- Be helpful, warm, and concise (under 120 words unless detail is requested).
+- Use **bold** for key figures.
+- Give actionable advice grounded in the user's actual numbers.
+- Never make up data not provided above.`
   }
 
-  function send(msg: string) {
+  async function send(msg: string) {
     msg = msg.trim()
     if (!msg || thinking) return
-    setMessages(prev => [...prev, { role: 'user', html: msg }])
+
+    const userMsg: Message = { role: 'user', text: msg, html: msg }
+    setMessages(prev => [...prev, userMsg])
     setInput('')
     setThinking(true)
-    setTimeout(() => {
-      const resp = buildResponse(msg)
-      setMessages(prev => [...prev, { role: 'ai', html: md(resp) }])
+
+    try {
+      // Gemini requires conversation to start with 'user' role — skip leading AI intro
+      const allMessages = [...messages, userMsg]
+      const startIdx = allMessages.findIndex(m => m.role === 'user')
+      const history = (startIdx >= 0 ? allMessages.slice(startIdx) : allMessages)
+        .map(m => ({ role: m.role, text: m.text }))
+
+      const res = await fetch('/api/ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ systemPrompt: buildSystemPrompt(), messages: history }),
+      })
+
+      const data = await res.json()
+      const respText: string = res.ok
+        ? (data.text || 'Sorry, I got an empty response.')
+        : 'Sorry, I couldn\'t reach the AI right now. Please try again.'
+
+      setMessages(prev => [...prev, { role: 'ai', text: respText, html: md(respText) }])
+    } catch {
+      setMessages(prev => [...prev, {
+        role: 'ai',
+        text: 'Connection error. Please try again.',
+        html: 'Connection error. Please try again.',
+      }])
+    } finally {
       setThinking(false)
-    }, 600)
+    }
   }
 
   if (loading) return null
