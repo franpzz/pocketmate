@@ -20,7 +20,7 @@ function md(text: string) {
 }
 
 export default function AskClient() {
-  const { profile, fixedExpenses, monthlySavings, cycleState, loading } = useAppState()
+  const { profile, fixedExpenses, monthlySavings, cycleState, transactions, loading } = useAppState()
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput]       = useState('')
   const [thinking, setThinking] = useState(false)
@@ -61,6 +61,25 @@ export default function AskClient() {
       ? fixedExpenses.map(f => `  - ${f.name}: $${f.amount}${f.split > 1 ? ` (split ${f.split}x)` : ''}`).join('\n')
       : '  - None'
 
+    // Category spending summary (expenses only)
+    const catTotals: Record<string, { total: number; count: number }> = {}
+    for (const t of transactions) {
+      if (t.is_positive) continue
+      if (!catTotals[t.cat]) catTotals[t.cat] = { total: 0, count: 0 }
+      catTotals[t.cat].total += t.amount
+      catTotals[t.cat].count += 1
+    }
+    const catSummary = Object.entries(catTotals)
+      .sort((a, b) => b[1].total - a[1].total)
+      .map(([cat, { total, count }]) => `  - ${cat}: $${total.toFixed(2)} (${count} transaction${count !== 1 ? 's' : ''})`)
+      .join('\n') || '  - No expense transactions yet'
+
+    // Transaction list (most recent first, up to 200)
+    const txnLines = transactions
+      .slice(0, 200)
+      .map(t => `  ${t.date} | ${t.name} | ${t.cat} | ${t.is_positive ? '+' : '-'}$${t.amount.toFixed(2)}`)
+      .join('\n') || '  No transactions recorded yet'
+
     return `You are PocketMate, a friendly and concise personal finance assistant. Answer using the user's real data below.
 
 USER FINANCIAL DATA:
@@ -75,8 +94,14 @@ USER FINANCIAL DATA:
 - Weekly budgets — groceries: $${profile.groceries}, dining: $${profile.dining}, transport: $${profile.transport}, entertainment: $${profile.entertainment}
 - Fixed expenses:\n${fixedList}
 
+SPENDING BY CATEGORY (expenses only, all time):
+${catSummary}
+
+TRANSACTION HISTORY (most recent first):
+${txnLines}
+
 RULES:
-- Be helpful, warm, and concise (under 120 words unless detail is requested).
+- Be helpful, warm, and concise (under 150 words unless detail is requested).
 - Use **bold** for key figures.
 - Give actionable advice grounded in the user's actual numbers.
 - Never make up data not provided above.`
