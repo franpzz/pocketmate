@@ -32,8 +32,8 @@ function rangeStart(range: Range): Date {
 
 // ── SVG chart helpers ──────────────────────────────────────────────────────────
 const SVG_W = 560
-const SVG_H = 180
-const PL = 52, PR = 16, PT = 20, PB = 32
+const SVG_H = 100
+const PL = 44, PR = 10, PT = 10, PB = 20
 const CW = SVG_W - PL - PR
 const CH = SVG_H - PT - PB
 
@@ -69,6 +69,7 @@ export default function InsightsClient() {
   const { transactions, profile, customCats, loading } = useAppState()
   const [range,     setRange]     = useState<Range>('month')
   const [chartMode, setChartMode] = useState<ChartMode>('cumulative')
+  const [chartCat,  setChartCat]  = useState<string>('all')
 
   if (loading || !profile) return <div className={s.loading}>Loading…</div>
 
@@ -100,11 +101,17 @@ export default function InsightsClient() {
   // ── Top expenses ─────────────────────────────────────────────────────────────
   const topExpenses = [...expensesInRange].sort((a, b) => b.amount - a.amount).slice(0, 8)
 
+  // ── Category options for chart filter ────────────────────────────────────────
+  const allChartCats = [...new Set(
+    transactions.filter(t => !t.is_positive).map(t => t.cat)
+  )].sort()
+
   // ── Cumulative spending — current month ───────────────────────────────────────
   const currentDay = now.getDate()
+  const cumSrc = chartCat === 'all' ? thisMonthExpenses : thisMonthExpenses.filter(t => t.cat === chartCat)
   const dailyAmts = Array.from({ length: currentDay }, (_, i) => {
     const dayStr = `${thisMonth}-${String(i + 1).padStart(2, '0')}`
-    return thisMonthExpenses.filter(t => t.date === dayStr).reduce((a, t) => a + t.amount, 0)
+    return cumSrc.filter(t => t.date === dayStr).reduce((a, t) => a + t.amount, 0)
   })
   const cumulative = dailyAmts.reduce<number[]>((acc, v) => {
     acc.push((acc[acc.length - 1] ?? 0) + v)
@@ -127,6 +134,7 @@ export default function InsightsClient() {
   const monthlySpent: Record<string, number> = {}
   for (const t of transactions) {
     if (!t.is_positive && new Date(t.date) >= cutoff) {
+      if (chartCat !== 'all' && t.cat !== chartCat) continue
       const key = t.date.substring(0, 7)
       monthlySpent[key] = (monthlySpent[key] || 0) + t.amount
     }
@@ -191,19 +199,29 @@ export default function InsightsClient() {
       <div className={s.card} style={{ marginBottom: 24 }}>
         <div className={s.chartHeader}>
           <div className={s.cardTitle} style={{ marginBottom: 0 }}>Spending chart</div>
-          <div className={s.chartToggle}>
-            <button
-              className={`${s.chartToggleBtn} ${chartMode === 'cumulative' ? s.active : ''}`}
-              onClick={() => setChartMode('cumulative')}
+          <div className={s.chartControls}>
+            <select
+              className={s.chartCatSelect}
+              value={chartCat}
+              onChange={e => setChartCat(e.target.value)}
             >
-              This month
-            </button>
-            <button
-              className={`${s.chartToggleBtn} ${chartMode === 'monthly' ? s.active : ''}`}
-              onClick={() => setChartMode('monthly')}
-            >
-              By month
-            </button>
+              <option value="all">All categories</option>
+              {allChartCats.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <div className={s.chartToggle}>
+              <button
+                className={`${s.chartToggleBtn} ${chartMode === 'cumulative' ? s.active : ''}`}
+                onClick={() => setChartMode('cumulative')}
+              >
+                This month
+              </button>
+              <button
+                className={`${s.chartToggleBtn} ${chartMode === 'monthly' ? s.active : ''}`}
+                onClick={() => setChartMode('monthly')}
+              >
+                By month
+              </button>
+            </div>
           </div>
         </div>
 
@@ -237,7 +255,7 @@ export default function InsightsClient() {
                 {[0, 0.5, 1].map(f => (
                   <text key={f}
                     x={PL - 6} y={(PT + CH - f * CH + 4).toFixed(1)}
-                    textAnchor="end" fontSize="10" fill="var(--text3)"
+                    textAnchor="end" fontSize="9" fill="var(--text3)"
                   >
                     {f === 0 ? '$0' : yTickLabel(f, maxCumulative)}
                   </text>
@@ -253,7 +271,7 @@ export default function InsightsClient() {
                 {/* End dot */}
                 <circle
                   cx={cumPts[cumPts.length - 1]?.x} cy={cumPts[cumPts.length - 1]?.y}
-                  r="4" fill="var(--accent)" stroke="var(--surface)" strokeWidth="2"
+                  r="3" fill="var(--accent)" stroke="var(--surface)" strokeWidth="1.5"
                 />
 
                 {/* X axis labels */}
@@ -261,7 +279,7 @@ export default function InsightsClient() {
                   const p = toSvgPt(i, currentDay, 0, 1)
                   return (
                     <text key={i} x={p.x.toFixed(1)} y={SVG_H - 6}
-                      textAnchor="middle" fontSize="10" fill="var(--text3)"
+                      textAnchor="middle" fontSize="9" fill="var(--text3)"
                     >
                       {label}
                     </text>
@@ -317,9 +335,9 @@ export default function InsightsClient() {
                 {last12.map((m, i) => (
                   <circle key={m.key}
                     cx={monthPts[i].x.toFixed(1)} cy={monthPts[i].y.toFixed(1)}
-                    r={m.isCurrent ? 5 : 3}
+                    r={m.isCurrent ? 4 : 2.5}
                     fill={m.isCurrent ? 'var(--accent)' : 'var(--red)'}
-                    stroke="var(--surface)" strokeWidth="2"
+                    stroke="var(--surface)" strokeWidth="1.5"
                   />
                 ))}
 
@@ -327,7 +345,7 @@ export default function InsightsClient() {
                 {last12.map((m, i) => (
                   <text key={m.key}
                     x={monthPts[i].x.toFixed(1)} y={SVG_H - 6}
-                    textAnchor="middle" fontSize="10"
+                    textAnchor="middle" fontSize="9"
                     fill={m.isCurrent ? 'var(--accent)' : 'var(--text3)'}
                     fontWeight={m.isCurrent ? '700' : '400'}
                   >

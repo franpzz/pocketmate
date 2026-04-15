@@ -104,6 +104,30 @@
   flex-wrap: wrap;
 }
 
+.chartControls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.chartCatSelect {
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 20px;
+  padding: 5px 12px;
+  color: var(--text2);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+  transition: border 0.2s;
+}
+
+.chartCatSelect:focus { border-color: var(--accent); color: var(--text); }
+
 .chartToggle {
   display: flex;
   background: var(--surface2);
