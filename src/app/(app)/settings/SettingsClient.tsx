@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useAppState } from '@/context/AppStateContext'
@@ -9,6 +9,39 @@ import { CAT_NAMES, getCatDef, getAllCatNames } from '@/lib/categories'
 import { fixedTotal } from '@/lib/finance'
 import type { Cadence } from '@/lib/types'
 import s from './settings.module.css'
+
+const EMOJI_OPTIONS = [
+  // Pets
+  '🐶','🐱','🐰','🐾','🦮','🐠','🐦',
+  // Home & garden
+  '🏡','🌱','🪴','🌻','🔧','🛋️','🧰',
+  // Health & wellness
+  '💊','🏥','🩺','🧘','🏃','💉','🩹',
+  // Entertainment & hobbies
+  '🎮','🎲','🎯','🎸','🎵','🎨','🎬',
+  // Travel
+  '✈️','🏖️','🗺️','🏕️','🎒','🚢','🧳',
+  // Fashion & beauty
+  '👕','👟','💄','💅','👜','🕶️','💍',
+  // Education
+  '📚','🎓','✏️','📖','🖊️',
+  // Tech
+  '💻','📱','🎧','📷','🖥️',
+  // Transport
+  '🚗','⛽','🚲','🛵','🚌',
+  // Money
+  '💸','💳','🏦','🪙','💰',
+  // Household
+  '🧹','🧺','🧴','🪣','🧻',
+  // Kids
+  '👶','🧸','🍼','🎡','🖍️',
+  // Fitness & sport
+  '🏋️','⚽','🎾','🏊','🧗',
+  // Celebrations & gifts
+  '🎁','🎉','🥂','🍰','🎊',
+  // Drinks & extras
+  '☕','🍵','🍺','🍷','🧃',
+]
 
 interface FixedRow {
   id?: string
@@ -48,9 +81,11 @@ export default function SettingsClient() {
   const [fixed, setFixed] = useState<FixedRow[]>([])
 
   // Custom categories
-  const [catList,     setCatList]     = useState<CatRow[]>([])
-  const [newCatName,  setNewCatName]  = useState('')
-  const [newCatIcon,  setNewCatIcon]  = useState('')
+  const [catList,       setCatList]       = useState<CatRow[]>([])
+  const [newCatName,    setNewCatName]    = useState('')
+  const [newCatIcon,    setNewCatIcon]    = useState('🏷')
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false)
+  const emojiPickerRef = useRef<HTMLDivElement>(null)
 
   // Wallet adjustment
   const [wallet, setWallet] = useState(0)
@@ -112,15 +147,28 @@ export default function SettingsClient() {
     setFixed(prev => prev.filter((_, idx) => idx !== i))
   }
 
+  // ── Emoji picker close-on-outside-click ──────────────────────────────────────
+  useEffect(() => {
+    if (!emojiPickerOpen) return
+    function handleClick(e: MouseEvent) {
+      if (emojiPickerRef.current && !emojiPickerRef.current.contains(e.target as Node)) {
+        setEmojiPickerOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [emojiPickerOpen])
+
   // ── Custom cat helpers ────────────────────────────────────────────────────────
   function addCat() {
     const n = newCatName.trim()
     if (!n) return
     const allNames = getAllCatNames(catList as any).map(x => x.toLowerCase())
     if (allNames.includes(n.toLowerCase())) return
-    setCatList(prev => [...prev, { name: n, icon: newCatIcon.trim() || '🏷' }])
+    setCatList(prev => [...prev, { name: n, icon: newCatIcon || '🏷' }])
     setNewCatName('')
-    setNewCatIcon('')
+    setNewCatIcon('🏷')
+    setEmojiPickerOpen(false)
   }
 
   function removeCat(i: number) {
@@ -467,14 +515,30 @@ export default function SettingsClient() {
           ))}
         </div>
         <div className={s.addCatRow}>
-          <input
-            className={s.catIconInput}
-            type="text"
-            maxLength={2}
-            placeholder="🏷"
-            value={newCatIcon}
-            onChange={e => setNewCatIcon(e.target.value)}
-          />
+          <div className={s.emojiPickerWrap} ref={emojiPickerRef}>
+            <button
+              type="button"
+              className={s.catIconBtn}
+              onClick={() => setEmojiPickerOpen(v => !v)}
+              title="Pick an icon"
+            >
+              {newCatIcon}
+            </button>
+            {emojiPickerOpen && (
+              <div className={s.emojiPicker}>
+                {EMOJI_OPTIONS.map(e => (
+                  <button
+                    key={e}
+                    type="button"
+                    className={`${s.emojiOption} ${newCatIcon === e ? s.emojiSelected : ''}`}
+                    onClick={() => { setNewCatIcon(e); setEmojiPickerOpen(false) }}
+                  >
+                    {e}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <input
             className={s.catNameInput}
             type="text"
