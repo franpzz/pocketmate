@@ -110,6 +110,8 @@ RULES:
         respText = data.text || 'Sorry, I got an empty response.'
       } else if (res.status === 503) {
         respText = 'AI is not configured yet. Add a **GEMINI_API_KEY** in your Vercel environment variables.'
+      } else if (data.status === 429) {
+        respText = 'Rate limit reached — the free Gemini tier allows 15 requests per minute. Please wait a moment and try again.'
       } else {
         console.error('AI error:', data)
         respText = 'Sorry, I couldn\'t reach the AI right now. Please try again.'
@@ -177,7 +179,7 @@ RULES:
             onKeyDown={e => e.key === 'Enter' && send(input)}
             placeholder="Ask about spending, savings, budgets…"
           />
-          <button className={s.sendBtn} onClick={() => send(input)}>Send</button>
+          <button className={s.sendBtn} onClick={() => send(input)} disabled={thinking}>Send</button>
         </div>
       </div>
     </div>
