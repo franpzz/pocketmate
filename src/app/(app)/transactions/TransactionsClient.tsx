@@ -20,6 +20,7 @@ function fmtDate(iso: string) {
 export default function TransactionsClient() {
   const { transactions, cycleState, loading, isGuest, refetch, guestUpdate } = useAppState()
   const [filter, setFilter] = useState<'all' | 'expenses' | 'income'>('all')
+  const [search, setSearch] = useState('')
   const [confirmId, setConfirmId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
@@ -27,9 +28,11 @@ export default function TransactionsClient() {
   const cm = now.getMonth()
   const year = now.getFullYear()
 
+  const q = search.trim().toLowerCase()
   const filtered = transactions.filter(t => {
-    if (filter === 'expenses') return !t.is_positive
-    if (filter === 'income')   return t.is_positive
+    if (filter === 'expenses' && t.is_positive)  return false
+    if (filter === 'income'   && !t.is_positive) return false
+    if (q && !t.name.toLowerCase().includes(q) && !t.cat.toLowerCase().includes(q)) return false
     return true
   })
 
@@ -124,9 +127,24 @@ export default function TransactionsClient() {
         </div>
       </div>
 
+      <div className={s.searchRow}>
+        <input
+          className={s.searchInput}
+          type="search"
+          placeholder="Search by name or category…"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+        />
+        {search && (
+          <button className={s.searchClear} onClick={() => setSearch('')}>×</button>
+        )}
+      </div>
+
       {filtered.length === 0 ? (
         <div className={s.card}>
-          <div className={s.empty}>No transactions yet — log an expense to get started.</div>
+          <div className={s.empty}>
+            {search ? `No results for "${search}"` : 'No transactions yet — log an expense to get started.'}
+          </div>
         </div>
       ) : (
         sortedKeys.map(key => (

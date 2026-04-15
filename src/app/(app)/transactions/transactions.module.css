@@ -33,6 +33,44 @@
 .filterBtn:hover  { border-color: var(--accent); color: var(--accent); }
 .filterBtn.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); font-weight: 600; }
 
+.searchRow {
+  position: relative;
+  margin-bottom: 16px;
+}
+
+.searchInput {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-sm);
+  padding: 10px 36px 10px 14px;
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  outline: none;
+  transition: border 0.2s;
+  box-shadow: var(--shadow);
+}
+
+.searchInput:focus { border-color: var(--accent); }
+.searchInput::placeholder { color: var(--text3); }
+
+.searchClear {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--text3);
+  font-size: 18px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 2px 4px;
+}
+
+.searchClear:hover { color: var(--text); }
+
 .card {
   background: var(--surface);
   border: 1px solid var(--border);

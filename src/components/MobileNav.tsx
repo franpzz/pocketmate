@@ -10,7 +10,7 @@ import s from './MobileNav.module.css'
 const BOTTOM_NAV = [
   { href: '/dashboard', icon: '◈', label: 'Home' },
   { href: '/log',       icon: '+', label: 'Log' },
-  { href: '/shopping',  icon: '⊞', label: 'Shop' },
+  { href: '/insights',  icon: '▤', label: 'Insights' },
   { href: '/ask',       icon: '✦', label: 'Ask' },
   { href: '/settings',  icon: '⚙', label: 'Settings' },
 ]

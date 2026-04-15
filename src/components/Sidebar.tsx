@@ -9,6 +9,7 @@ import s from './Sidebar.module.css'
 const NAV_MAIN = [
   { href: '/dashboard',    icon: '◈', label: 'Dashboard' },
   { href: '/transactions', icon: '↕', label: 'Transactions' },
+  { href: '/insights',     icon: '▤', label: 'Insights' },
   { href: '/log',          icon: '+', label: 'Log expense' },
 ]
 const NAV_PLAN = [
